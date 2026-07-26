@@ -6,6 +6,7 @@ import "core:unicode/utf8"
 Token_Type :: enum {
   Word,
   Comment,
+  StartDef,
   Eos,
 }
 
@@ -52,6 +53,8 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         continue
       case ch == '#':
         return tokenizer_transition_from_comment(tokenizer)
+      case ch == ':':
+        return tokenizer_transition_from_start_definition(tokenizer)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
@@ -98,6 +101,38 @@ tokenizer_transition_from_comment :: proc(tokenizer: ^Tokenizer) -> (Token, Erro
   }, nil
 }
 
+
+
+tokenizer_transition_from_start_definition :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  // Consume the ':' char
+  tokenizer_advance(tokenizer)
+
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok || !is_whitespace(ch) {
+      break
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  // Now we're at the definition name
+  tokenizer_note_start_token(tokenizer)
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok || is_name_break(ch) {
+      break
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  return Token{
+    token_type = .StartDef,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
+}
+
 // ----------------------------------------------------------------------------
 // Support
 
@@ -112,6 +147,21 @@ tokenizer_advance :: proc(tokenizer: ^Tokenizer) -> rune {
     tokenizer.column += 1
   }
   return r;
+}
+
+is_name_break :: proc(ch: rune) -> bool {
+  if is_whitespace(ch) {
+    return true
+  }
+
+  switch ch {
+    case ':', ';', '[', ']', '{', '}':
+      return true
+    case '\'', '"':
+      return true
+    case:
+      return false
+  }
 }
 
 is_whitespace :: proc(ch: rune) -> bool {

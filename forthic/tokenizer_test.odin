@@ -17,9 +17,18 @@ test_tokenize_single_word :: proc(t: ^testing.T) {
   defer tokenizer_destroy(&tokenizer)
 
   token, err := tokenizer_next_token(&tokenizer)
+  defer delete(token.text)
   testing.expect(t, err == nil)
   testing.expect_value(t, token.token_type, Token_Type.Word)
   testing.expect_value(t, token.text, "DUP")
+}
+
+@(private)
+delete_tokens :: proc(tokens: [dynamic]Token) {
+  for token in tokens {
+    delete(token.text)
+  }
+  delete(tokens)
 }
 
 @(private)
@@ -44,10 +53,21 @@ tokenize_all :: proc(forthic: string) -> [dynamic]Token {
 @(test)
 test_comment :: proc(t: ^testing.T) {
   tokens := tokenize_all("DUP # This is a comment\nSWAP")
-  defer delete(tokens)
+  defer delete_tokens(tokens)
 
   testing.expect_value(t, len(tokens), 3)
   testing.expect_value(t, tokens[0].token_type, Token_Type.Word)
   testing.expect_value(t, tokens[1].token_type, Token_Type.Comment)
   testing.expect_value(t, tokens[2].token_type, Token_Type.Word)
+}
+
+@(test)
+test_definition :: proc(t: ^testing.T) {
+  // NOTE: forthic-rs's test_definition also checks that the closing `;`
+  // produces an EndDef token; that's deferred until EndDef is implemented.
+  tokens := tokenize_all(": DOUBLE 2 *")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartDef)
+  testing.expect_value(t, tokens[0].text, "DOUBLE")
 }
