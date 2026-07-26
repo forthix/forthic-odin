@@ -71,7 +71,7 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
       case ch == ']':
         return tokenizer_transition_single_char(tokenizer, .EndArray)
       case ch == '{':
-        // TODO
+        return tokenizer_transition_from_start_module(tokenizer)
       case ch == '}':
         return tokenizer_transition_single_char(tokenizer, .EndModule)
       case ch == '.':
@@ -84,19 +84,21 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
 }
 
 
+tokenizer_transition_from_start_module :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  tokenizer_advance(tokenizer)
+
+  text := tokenizer_gather_until_name_break(tokenizer)
+  return Token{
+    token_type = .StartModule,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
+}
+
 tokenizer_transition_from_gather_dot_symbol :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
   tokenizer_advance(tokenizer)
-  tokenizer_note_start_token(tokenizer)
 
-  for tokenizer.byte_pos < len(tokenizer.input_string) {
-    ch, ok := tokenizer_peek(tokenizer)
-    if !ok || is_name_break(ch) {
-      break
-    }
-    tokenizer_advance(tokenizer)
-  }
-
-  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  text := tokenizer_gather_until_name_break(tokenizer)
   return Token{
     token_type = .DotSymbol,
     text = text,
@@ -199,7 +201,10 @@ tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
     tokenizer_advance(tokenizer)
   }
 
-  // Now we're at the definition name
+  return tokenizer_gather_until_name_break(tokenizer)
+}
+
+tokenizer_gather_until_name_break :: proc(tokenizer: ^Tokenizer) -> string {
   tokenizer_note_start_token(tokenizer)
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
@@ -209,8 +214,7 @@ tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
     tokenizer_advance(tokenizer)
   }
 
-  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
-  return text
+  return strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
 }
 
 is_start_memo :: proc(tokenizer: ^Tokenizer) -> bool {

@@ -102,14 +102,17 @@ test_dot_symbol :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_end_module :: proc(t: ^testing.T) {
-  // NOTE: forthic-rs's test_module also checks StartModule ('{'), which
-  // needs transition_from_gather_module; that's deferred until StartModule
-  // is implemented. This scopes down to just EndModule ('}').
-  tokens := tokenize_all("WORD }")
+test_module :: proc(t: ^testing.T) {
+  tokens := tokenize_all("{ : WORD 42 ; }")
   defer delete_tokens(tokens)
 
-  testing.expect_value(t, len(tokens), 2)
-  testing.expect_value(t, tokens[1].token_type, Token_Type.EndModule)
-  testing.expect_value(t, tokens[1].text, "}")
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartModule)
+
+  found_end_module := false
+  for token in tokens {
+    if token.token_type == .EndModule {
+      found_end_module = true
+    }
+  }
+  testing.expect(t, found_end_module)
 }
