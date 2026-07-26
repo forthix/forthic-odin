@@ -63,13 +63,12 @@ test_comment :: proc(t: ^testing.T) {
 
 @(test)
 test_definition :: proc(t: ^testing.T) {
-  // NOTE: forthic-rs's test_definition also checks that the closing `;`
-  // produces an EndDef token; that's deferred until EndDef is implemented.
-  tokens := tokenize_all(": DOUBLE 2 *")
+  tokens := tokenize_all(": DOUBLE 2 * ;")
   defer delete_tokens(tokens)
 
   testing.expect_value(t, tokens[0].token_type, Token_Type.StartDef)
   testing.expect_value(t, tokens[0].text, "DOUBLE")
+  testing.expect_value(t, tokens[3].token_type, Token_Type.EndDef)
 }
 
 @(test)
@@ -79,4 +78,28 @@ test_memo :: proc(t: ^testing.T) {
 
   testing.expect_value(t, tokens[0].token_type, Token_Type.StartMemo)
   testing.expect_value(t, tokens[0].text, "CACHED")
+}
+
+@(test)
+test_array :: proc(t: ^testing.T) {
+  tokens := tokenize_all("[ 1 2 3 ]")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 5)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartArray)
+  testing.expect_value(t, tokens[1].token_type, Token_Type.Word)
+  testing.expect_value(t, tokens[4].token_type, Token_Type.EndArray)
+}
+
+@(test)
+test_end_module :: proc(t: ^testing.T) {
+  // NOTE: forthic-rs's test_module also checks StartModule ('{'), which
+  // needs transition_from_gather_module; that's deferred until StartModule
+  // is implemented. This scopes down to just EndModule ('}').
+  tokens := tokenize_all("WORD }")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 2)
+  testing.expect_value(t, tokens[1].token_type, Token_Type.EndModule)
+  testing.expect_value(t, tokens[1].text, "}")
 }

@@ -8,6 +8,11 @@ Token_Type :: enum {
   Comment,
   StartDef,
   StartMemo,
+  EndDef,
+  StartArray,
+  EndArray,
+  StartModule,
+  EndModule,
   Eos,
 }
 
@@ -58,6 +63,16 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         return tokenizer_transition_from_start_definition(tokenizer)
       case is_start_memo(tokenizer):
         return tokenizer_transition_from_start_memo(tokenizer)
+      case ch == ';':
+        return tokenizer_transition_single_char(tokenizer, .EndDef)
+      case ch == '[':
+        return tokenizer_transition_single_char(tokenizer, .StartArray)
+      case ch == ']':
+        return tokenizer_transition_single_char(tokenizer, .EndArray)
+      case ch == '{':
+        // TODO
+      case ch == '}':
+        return tokenizer_transition_single_char(tokenizer, .EndModule)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
@@ -137,6 +152,19 @@ tokenizer_transition_from_start_memo :: proc(tokenizer: ^Tokenizer) -> (Token, E
 // ----------------------------------------------------------------------------
 // Support
 
+
+tokenizer_transition_single_char :: proc(tokenizer: ^Tokenizer, token_type: Token_Type) -> (Token, Error) {
+  tokenizer_note_start_token(tokenizer)
+  tokenizer_advance(tokenizer)
+
+  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  return Token{
+    token_type = token_type,
+    text = text,
+    location = tokenizer_token_location(tokenizer)
+  }, nil
+  
+}
 
 tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
   for tokenizer.byte_pos < len(tokenizer.input_string) {
