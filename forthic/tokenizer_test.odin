@@ -92,6 +92,16 @@ test_array :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_dot_symbol :: proc(t: ^testing.T) {
+  tokens := tokenize_all(".field")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 1)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.DotSymbol)
+  testing.expect_value(t, tokens[0].text, "field")
+}
+
+@(test)
 test_end_module :: proc(t: ^testing.T) {
   // NOTE: forthic-rs's test_module also checks StartModule ('{'), which
   // needs transition_from_gather_module; that's deferred until StartModule

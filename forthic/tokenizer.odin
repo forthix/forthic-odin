@@ -13,6 +13,7 @@ Token_Type :: enum {
   EndArray,
   StartModule,
   EndModule,
+  DotSymbol,
   Eos,
 }
 
@@ -73,11 +74,34 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         // TODO
       case ch == '}':
         return tokenizer_transition_single_char(tokenizer, .EndModule)
+      case ch == '.':
+        return tokenizer_transition_from_gather_dot_symbol(tokenizer)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
   }
   return end_of_stream_token(tokenizer), nil
+}
+
+
+tokenizer_transition_from_gather_dot_symbol :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  tokenizer_advance(tokenizer)
+  tokenizer_note_start_token(tokenizer)
+
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok || is_name_break(ch) {
+      break
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  return Token{
+    token_type = .DotSymbol,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
 }
 
 
