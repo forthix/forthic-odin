@@ -77,6 +77,8 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         return tokenizer_transition_single_char(tokenizer, .EndModule)
       case ch == '.':
         return tokenizer_transition_from_gather_dot_symbol(tokenizer)
+      case is_triple_quote(tokenizer, ch):
+        return tokenizer_transition_from_gather_triple_quote_string(tokenizer, ch)
       case is_single_quote(tokenizer, ch):
         return tokenizer_transition_from_gather_string(tokenizer, ch)
       case:
@@ -84,6 +86,51 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
     }
   }
   return end_of_stream_token(tokenizer), nil
+}
+
+tokenizer_transition_from_gather_triple_quote_string :: proc(tokenizer: ^Tokenizer, delim: rune) -> (Token, Error) {
+  tokenizer_advance(tokenizer) // consume 1st opening delim
+  tokenizer_advance(tokenizer) // consume 2nd opening delim
+  tokenizer_advance(tokenizer) // consume 3rd opening delim
+  tokenizer_note_start_token(tokenizer)
+
+  builder: strings.Builder
+  strings.builder_init(&builder)
+  defer strings.builder_destroy(&builder)
+
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok {
+      break
+    }
+
+    if ch == delim && is_triple_quote(tokenizer, ch) {
+      ch4, ok4 := tokenizer_peek(tokenizer, 3)
+      if ok4 && ch4 == delim {
+        // Greedy mode: this quote is content, not the close -- consume it
+        // and keep scanning (catches overlapping runs of 4+ quotes).
+        strings.write_rune(&builder, delim)
+        tokenizer_advance(tokenizer)
+        continue
+      }
+
+      // Normal close: consume the closing triple quote
+      tokenizer_advance(tokenizer)
+      tokenizer_advance(tokenizer)
+      tokenizer_advance(tokenizer)
+      text := strings.clone(strings.to_string(builder))
+      return Token{
+        token_type = .String,
+        text = text,
+        location = tokenizer_token_location(tokenizer),
+      }, nil
+    }
+
+    strings.write_rune(&builder, ch)
+    tokenizer_advance(tokenizer)
+  }
+
+  return Token{}, Unterminated_String{location = tokenizer_token_location(tokenizer)}
 }
 
 tokenizer_transition_from_gather_string :: proc(tokenizer: ^Tokenizer, delim: rune) -> (Token, Error) {
@@ -276,14 +323,17 @@ is_single_quote :: proc(tokenizer: ^Tokenizer, ch: rune) -> bool {
   if !is_quote(ch) {
     return false
   }
+  return !is_triple_quote(tokenizer, ch)
+}
+
+is_triple_quote :: proc(tokenizer: ^Tokenizer, ch: rune) -> bool {
+  if !is_quote(ch) {
+    return false
+  }
 
   ch2, ok2 := tokenizer_peek(tokenizer, 1)
   ch3, ok3 := tokenizer_peek(tokenizer, 2)
-  if ok2 && ok3 && ch == ch2 && ch == ch3 {
-    // Triple quote
-    return false
-  }
-  return true
+  return ok2 && ok3 && ch == ch2 && ch == ch3
 }
 
 is_quote :: proc(ch: rune) -> bool {

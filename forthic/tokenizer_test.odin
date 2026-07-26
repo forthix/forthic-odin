@@ -149,6 +149,135 @@ test_string_literal :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_triple_quote_string :: proc(t: ^testing.T) {
+  tokens := tokenize_all("\"\"\"multi\nline\nstring\"\"\"")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 1)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.String)
+  testing.expect_value(t, tokens[0].text, "multi\nline\nstring")
+}
+
+@(private)
+gather_first_token :: proc(forthic: string) -> (Token, Error) {
+  tokenizer := make_tokenizer(forthic)
+  defer tokenizer_destroy(&tokenizer)
+  return tokenizer_next_token(&tokenizer)
+}
+
+@(test)
+test_triple_quote_greedy_trailing_apostrophe :: proc(t: ^testing.T) {
+  // Closing "'''" is preceded by content ending in an apostrophe, so the
+  // apostrophe run at the end is: content 'Hello' + closing '''. The quote
+  // right after the candidate close matches the delim, so it's consumed as
+  // content (greedy), and the *next* ''' is the real close.
+  token, err := gather_first_token("'''I said 'Hello''''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "I said 'Hello'")
+}
+
+@(test)
+test_triple_quote_normal_no_greedy :: proc(t: ^testing.T) {
+  token, err := gather_first_token("'''Hello'''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "Hello")
+}
+
+@(test)
+test_triple_quote_double_quote_greedy :: proc(t: ^testing.T) {
+  token, err := gather_first_token("\"\"\"I said \"Hello\"\"\"\"")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "I said \"Hello\"")
+}
+
+@(test)
+test_triple_quote_six_quotes_is_empty :: proc(t: ^testing.T) {
+  token, err := gather_first_token("''''''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "")
+}
+
+@(test)
+test_triple_quote_eight_quotes_two_content :: proc(t: ^testing.T) {
+  token, err := gather_first_token("''''''''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "''")
+}
+
+@(test)
+test_triple_quote_nested_quotes :: proc(t: ^testing.T) {
+  token, err := gather_first_token("\"\"\"He said \"I said 'Hello' to you\"\"\"\"")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "He said \"I said 'Hello' to you\"")
+}
+
+@(test)
+test_triple_quote_no_greedy_when_not_followed_by_quote :: proc(t: ^testing.T) {
+  // The first "'''" close here is followed by a space, not another quote,
+  // so it should close normally rather than treating it as greedy content.
+  token, err := gather_first_token("'''Hello''' world'''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "Hello")
+}
+
+@(test)
+test_triple_quote_apostrophes_in_content :: proc(t: ^testing.T) {
+  token, err := gather_first_token("'''It's a beautiful day, isn't it?''''")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "It's a beautiful day, isn't it?'")
+}
+
+@(test)
+test_triple_quote_mixed_delimiters_unterminated :: proc(t: ^testing.T) {
+  // Opened with ''' but "closed" with """ -- since the delimiters don't
+  // match, this never finds a valid close and should be Unterminated_String.
+  token, err := gather_first_token("'''Hello\"\"\"")
+  defer delete(token.text)
+
+  _, is_unterminated := err.(Unterminated_String)
+  testing.expect(t, is_unterminated)
+}
+
+@(test)
+test_triple_quote_backward_compatibility :: proc(t: ^testing.T) {
+  inputs := []string{
+    "'''simple'''",
+    "'''multi\nline\nstring'''",
+    "'''string with \"double quotes\"'''",
+    "'''string with 'single quotes'''''",
+  }
+  expected := []string{
+    "simple",
+    "multi\nline\nstring",
+    "string with \"double quotes\"",
+    "string with 'single quotes''",
+  }
+
+  for input, i in inputs {
+    token, err := gather_first_token(input)
+    testing.expect(t, err == nil)
+    testing.expect_value(t, token.text, expected[i])
+    delete(token.text)
+  }
+}
+
+@(test)
 test_unterminated_string :: proc(t: ^testing.T) {
   tokenizer := make_tokenizer("\"unterminated")
   defer tokenizer_destroy(&tokenizer)
