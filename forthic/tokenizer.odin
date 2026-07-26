@@ -11,8 +11,8 @@ Token_Type :: enum {
   EndDef,
   StartArray,
   EndArray,
-  StartModule,
-  EndModule,
+  StartRecord,
+  EndRecord,
   DotSymbol,
   String,
   Eos,
@@ -80,9 +80,9 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
       case ch == ']':
         return tokenizer_transition_single_char(tokenizer, .EndArray)
       case ch == '{':
-        return tokenizer_transition_from_start_module(tokenizer)
+        return tokenizer_transition_single_char(tokenizer, .StartRecord)
       case ch == '}':
-        return tokenizer_transition_single_char(tokenizer, .EndModule)
+        return tokenizer_transition_single_char(tokenizer, .EndRecord)
       case ch == '.':
         return tokenizer_transition_from_gather_dot_symbol(tokenizer)
       case is_triple_quote(tokenizer, ch):
@@ -204,17 +204,6 @@ escaped_char :: proc(tokenizer: ^Tokenizer) -> (rune, bool) {
   }
 }
 
-tokenizer_transition_from_start_module :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
-  tokenizer_advance(tokenizer)
-
-  text := tokenizer_gather_until_name_break(tokenizer)
-  return Token{
-    token_type = .StartModule,
-    text = text,
-    location = tokenizer_token_location(tokenizer),
-  }, nil
-}
-
 tokenizer_transition_from_gather_dot_symbol :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
   tokenizer_advance(tokenizer)
 
@@ -232,7 +221,7 @@ tokenizer_transition_from_word :: proc(tokenizer: ^Tokenizer) -> (Token, Error) 
 
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
-    if !ok || is_whitespace(ch) {
+    if !ok || is_word_break(ch) {
       break
     }
     tokenizer_advance(tokenizer)
@@ -430,6 +419,19 @@ is_name_break :: proc(ch: rune) -> bool {
 
   switch ch {
     case ':', ';', '[', ']', '{', '}':
+      return true
+    case:
+      return false
+  }
+}
+
+is_word_break :: proc(ch: rune) -> bool {
+  if is_whitespace(ch) {
+    return true
+  }
+
+  switch ch {
+    case ';', '[', ']', '{', '}', '#':
       return true
     case:
       return false
