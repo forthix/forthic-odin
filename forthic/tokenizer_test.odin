@@ -116,3 +116,46 @@ test_module :: proc(t: ^testing.T) {
   }
   testing.expect(t, found_end_module)
 }
+
+@(test)
+test_is_single_quote :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("\"hello\"")
+  defer tokenizer_destroy(&tokenizer)
+  testing.expect(t, is_single_quote(&tokenizer, '"'))
+}
+
+@(test)
+test_is_single_quote_rejects_non_quote :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("hello")
+  defer tokenizer_destroy(&tokenizer)
+  testing.expect(t, !is_single_quote(&tokenizer, 'h'))
+}
+
+@(test)
+test_is_single_quote_rejects_triple_quote :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("\"\"\"multi\nline\"\"\"")
+  defer tokenizer_destroy(&tokenizer)
+  testing.expect(t, !is_single_quote(&tokenizer, '"'))
+}
+
+@(test)
+test_string_literal :: proc(t: ^testing.T) {
+  tokens := tokenize_all("\"hello world\"")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 1)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.String)
+  testing.expect_value(t, tokens[0].text, "hello world")
+}
+
+@(test)
+test_unterminated_string :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("\"unterminated")
+  defer tokenizer_destroy(&tokenizer)
+
+  token, err := tokenizer_next_token(&tokenizer)
+  defer delete(token.text)
+
+  _, is_unterminated := err.(Unterminated_String)
+  testing.expect(t, is_unterminated)
+}

@@ -14,6 +14,7 @@ Token_Type :: enum {
   StartModule,
   EndModule,
   DotSymbol,
+  String,
   Eos,
 }
 
@@ -76,6 +77,8 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         return tokenizer_transition_single_char(tokenizer, .EndModule)
       case ch == '.':
         return tokenizer_transition_from_gather_dot_symbol(tokenizer)
+      case is_single_quote(tokenizer, ch):
+        return tokenizer_transition_from_gather_string(tokenizer, ch)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
@@ -83,6 +86,29 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
   return end_of_stream_token(tokenizer), nil
 }
 
+tokenizer_transition_from_gather_string :: proc(tokenizer: ^Tokenizer, delim: rune) -> (Token, Error) {
+  tokenizer_advance(tokenizer) // consume opening delim
+  tokenizer_note_start_token(tokenizer)
+
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok {
+      break
+    }
+    if ch == delim {
+      text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+      tokenizer_advance(tokenizer) // consume closing delim
+      return Token{
+        token_type = .String,
+        text = text,
+        location = tokenizer_token_location(tokenizer),
+      }, nil
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  return Token{}, Unterminated_String{location = tokenizer_token_location(tokenizer)}
+}
 
 tokenizer_transition_from_start_module :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
   tokenizer_advance(tokenizer)
@@ -246,15 +272,39 @@ tokenizer_advance :: proc(tokenizer: ^Tokenizer) -> rune {
   return r;
 }
 
+is_single_quote :: proc(tokenizer: ^Tokenizer, ch: rune) -> bool {
+  if !is_quote(ch) {
+    return false
+  }
+
+  ch2, ok2 := tokenizer_peek(tokenizer, 1)
+  ch3, ok3 := tokenizer_peek(tokenizer, 2)
+  if ok2 && ok3 && ch == ch2 && ch == ch3 {
+    // Triple quote
+    return false
+  }
+  return true
+}
+
+is_quote :: proc(ch: rune) -> bool {
+  switch ch {
+    case '\'', '"':
+      return true
+    case:
+      return false
+  }
+}
+
 is_name_break :: proc(ch: rune) -> bool {
   if is_whitespace(ch) {
+    return true
+  }
+  if is_quote(ch) {
     return true
   }
 
   switch ch {
     case ':', ';', '[', ']', '{', '}':
-      return true
-    case '\'', '"':
       return true
     case:
       return false
