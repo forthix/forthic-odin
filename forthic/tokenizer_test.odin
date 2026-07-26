@@ -23,6 +23,34 @@ test_tokenize_single_word :: proc(t: ^testing.T) {
   testing.expect_value(t, token.text, "DUP")
 }
 
+@(test)
+test_eos_on_empty_input :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("")
+  defer tokenizer_destroy(&tokenizer)
+
+  token, err := tokenizer_next_token(&tokenizer)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.token_type, Token_Type.Eos)
+}
+
+@(test)
+test_eos_after_last_token :: proc(t: ^testing.T) {
+  tokenizer := make_tokenizer("DUP")
+  defer tokenizer_destroy(&tokenizer)
+
+  first, first_err := tokenizer_next_token(&tokenizer)
+  defer delete(first.text)
+  testing.expect(t, first_err == nil)
+  testing.expect_value(t, first.token_type, Token_Type.Word)
+
+  second, second_err := tokenizer_next_token(&tokenizer)
+  defer delete(second.text)
+  testing.expect(t, second_err == nil)
+  testing.expect_value(t, second.token_type, Token_Type.Eos)
+}
+
 @(private)
 delete_tokens :: proc(tokens: [dynamic]Token) {
   for token in tokens {
@@ -103,6 +131,15 @@ test_definition :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_invalid_definition_name :: proc(t: ^testing.T) {
+  token, err := gather_first_token(": \"INVALID\" ;")
+  defer delete(token.text)
+
+  _, is_invalid_name := err.(Invalid_Word_Name)
+  testing.expect(t, is_invalid_name)
+}
+
+@(test)
 test_memo :: proc(t: ^testing.T) {
   tokens := tokenize_all("@: CACHED 42")
   defer delete_tokens(tokens)
@@ -177,6 +214,57 @@ test_string_literal :: proc(t: ^testing.T) {
   testing.expect_value(t, len(tokens), 1)
   testing.expect_value(t, tokens[0].token_type, Token_Type.String)
   testing.expect_value(t, tokens[0].text, "hello world")
+}
+
+@(test)
+test_string_escape_newline :: proc(t: ^testing.T) {
+  // Forthic source: "a\nb" (backslash-n, not a real newline)
+  token, err := gather_first_token(`"a\nb"`)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "a\nb")
+}
+
+@(test)
+test_string_escape_tab :: proc(t: ^testing.T) {
+  token, err := gather_first_token(`"a\tb"`)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "a\tb")
+}
+
+@(test)
+test_string_escape_backslash :: proc(t: ^testing.T) {
+  // Forthic source: "a\\b" (two literal backslashes) -> one literal backslash
+  token, err := gather_first_token(`"a\\b"`)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, `a\b`)
+}
+
+@(test)
+test_string_escape_quote :: proc(t: ^testing.T) {
+  // Forthic source: "she said \"hi\""
+  token, err := gather_first_token(`"she said \"hi\""`)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, `she said "hi"`)
+}
+
+@(test)
+test_string_escape_unrecognized_passthrough :: proc(t: ^testing.T) {
+  // \U is not a recognized escape, so both the backslash and the char
+  // are kept literally -- this preserves things like Windows paths and
+  // regex patterns (e.g. \d) that happen to appear in a string.
+  token, err := gather_first_token("\"C:\\Users\"")
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.text, "C:\\Users")
 }
 
 @(test)

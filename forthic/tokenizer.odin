@@ -145,13 +145,33 @@ tokenizer_transition_from_gather_string :: proc(tokenizer: ^Tokenizer, delim: ru
   tokenizer_advance(tokenizer) // consume opening delim
   tokenizer_note_start_token(tokenizer)
 
+  builder: strings.Builder
+  strings.builder_init(&builder)
+  defer strings.builder_destroy(&builder)
+
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
     if !ok {
       break
     }
+
+    if ch == '\\' {
+      escaped, has_escape := escaped_char(tokenizer)
+      tokenizer_advance(tokenizer) // consume backslash
+      if has_escape {
+        strings.write_rune(&builder, escaped)
+        tokenizer_advance(tokenizer) // consume escaped char
+      } else {
+        // Unrecognized escape: keep the backslash literal; the following
+        // char is handled normally on the next iteration (preserves things
+        // like regex '\d' and Windows paths 'C:\Users').
+        strings.write_rune(&builder, '\\')
+      }
+      continue
+    }
+
     if ch == delim {
-      text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+      text := strings.clone(strings.to_string(builder))
       tokenizer_advance(tokenizer) // consume closing delim
       return Token{
         token_type = .String,
@@ -159,10 +179,29 @@ tokenizer_transition_from_gather_string :: proc(tokenizer: ^Tokenizer, delim: ru
         location = tokenizer_token_location(tokenizer),
       }, nil
     }
+
+    strings.write_rune(&builder, ch)
     tokenizer_advance(tokenizer)
   }
 
   return Token{}, Unterminated_String{location = tokenizer_token_location(tokenizer)}
+}
+
+escaped_char :: proc(tokenizer: ^Tokenizer) -> (rune, bool) {
+  next_ch, ok := tokenizer_peek(tokenizer, 1)
+  if !ok {
+    return 0, false
+  }
+  switch next_ch {
+    case 'n':  return '\n', true
+    case 't':  return '\t', true
+    case 'r':  return '\r', true
+    case '0':  return 0, true
+    case '\\': return '\\', true
+    case '"':  return '"', true
+    case '\'': return '\'', true
+    case: return 0, false
+  }
 }
 
 tokenizer_transition_from_start_module :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
@@ -232,7 +271,10 @@ tokenizer_transition_from_start_definition :: proc(tokenizer: ^Tokenizer) -> (To
   // Consume the ':' char
   tokenizer_advance(tokenizer)
 
-  text := tokenizer_gather_name(tokenizer)
+  text, err := tokenizer_gather_name(tokenizer)
+  if err != nil {
+    return Token{}, err
+  }
 
   return Token{
     token_type = .StartDef,
@@ -246,7 +288,10 @@ tokenizer_transition_from_start_memo :: proc(tokenizer: ^Tokenizer) -> (Token, E
   tokenizer_advance(tokenizer)
   tokenizer_advance(tokenizer)
 
-  text := tokenizer_gather_name(tokenizer)
+  text, err := tokenizer_gather_name(tokenizer)
+  if err != nil {
+    return Token{}, err
+  }
 
   return Token{
     token_type = .StartMemo,
@@ -273,7 +318,7 @@ tokenizer_transition_single_char :: proc(tokenizer: ^Tokenizer, token_type: Toke
   
 }
 
-tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
+tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> (string, Error) {
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
     if !ok || !is_whitespace(ch) {
@@ -282,7 +327,29 @@ tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
     tokenizer_advance(tokenizer)
   }
 
-  return tokenizer_gather_until_name_break(tokenizer)
+  tokenizer_note_start_token(tokenizer)
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok || is_whitespace(ch) {
+      break
+    }
+    if is_quote(ch) {
+      return "", Invalid_Word_Name{
+        note = "Names can't have quotes in them",
+        location = tokenizer_token_location(tokenizer),
+      }
+    }
+    if ch == ';' || ch == '[' || ch == ']' || ch == '{' || ch == '}' {
+      return "", Invalid_Word_Name{
+        note = "Names can't have that character in them",
+        location = tokenizer_token_location(tokenizer),
+      }
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  return text, nil
 }
 
 tokenizer_gather_until_name_break :: proc(tokenizer: ^Tokenizer) -> string {
