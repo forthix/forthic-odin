@@ -71,3 +71,12 @@ test_definition :: proc(t: ^testing.T) {
   testing.expect_value(t, tokens[0].token_type, Token_Type.StartDef)
   testing.expect_value(t, tokens[0].text, "DOUBLE")
 }
+
+@(test)
+test_memo :: proc(t: ^testing.T) {
+  tokens := tokenize_all("@: CACHED 42")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartMemo)
+  testing.expect_value(t, tokens[0].text, "CACHED")
+}

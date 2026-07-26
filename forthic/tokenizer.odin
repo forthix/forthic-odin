@@ -7,6 +7,7 @@ Token_Type :: enum {
   Word,
   Comment,
   StartDef,
+  StartMemo,
   Eos,
 }
 
@@ -55,6 +56,8 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
         return tokenizer_transition_from_comment(tokenizer)
       case ch == ':':
         return tokenizer_transition_from_start_definition(tokenizer)
+      case is_start_memo(tokenizer):
+        return tokenizer_transition_from_start_memo(tokenizer)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
@@ -107,6 +110,35 @@ tokenizer_transition_from_start_definition :: proc(tokenizer: ^Tokenizer) -> (To
   // Consume the ':' char
   tokenizer_advance(tokenizer)
 
+  text := tokenizer_gather_name(tokenizer)
+
+  return Token{
+    token_type = .StartDef,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
+}
+
+tokenizer_transition_from_start_memo :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  // Consume the '@:' string
+  tokenizer_advance(tokenizer)
+  tokenizer_advance(tokenizer)
+
+  text := tokenizer_gather_name(tokenizer)
+
+  return Token{
+    token_type = .StartMemo,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
+}
+
+
+// ----------------------------------------------------------------------------
+// Support
+
+
+tokenizer_gather_name :: proc(tokenizer: ^Tokenizer) -> string {
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
     if !ok || !is_whitespace(ch) {
@@ -126,15 +158,24 @@ tokenizer_transition_from_start_definition :: proc(tokenizer: ^Tokenizer) -> (To
   }
 
   text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
-  return Token{
-    token_type = .StartDef,
-    text = text,
-    location = tokenizer_token_location(tokenizer),
-  }, nil
+  return text
 }
 
-// ----------------------------------------------------------------------------
-// Support
+is_start_memo :: proc(tokenizer: ^Tokenizer) -> bool {
+  ch1, ok1 := tokenizer_peek(tokenizer)
+  if !ok1 {
+    return false
+  }
+  ch2, ok2 := tokenizer_peek(tokenizer, 1)
+  if !ok2 {
+    return false
+  }
+
+  if ch1 == '@' && ch2 == ':' {
+    return true
+  }
+  return false
+}
 
 tokenizer_advance :: proc(tokenizer: ^Tokenizer) -> rune {
   r, width := utf8.decode_rune_in_string(tokenizer.input_string[tokenizer.byte_pos:])
