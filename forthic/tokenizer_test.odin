@@ -51,6 +51,37 @@ tokenize_all :: proc(forthic: string) -> [dynamic]Token {
 }
 
 @(test)
+test_token_locations :: proc(t: ^testing.T) {
+  tokens := tokenize_all("DUP SWAP")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, tokens[0].location.start, Position{line = 1, column = 1})
+  testing.expect_value(t, tokens[0].location.end, Position{line = 1, column = 4})
+  testing.expect_value(t, tokens[1].location.start, Position{line = 1, column = 5})
+  testing.expect_value(t, tokens[1].location.end, Position{line = 1, column = 9})
+}
+
+@(test)
+test_token_location_seeded_from_reference :: proc(t: ^testing.T) {
+  reference_location := Code_Location{
+    start = Position{line = 5, column = 10},
+    end   = Position{line = 5, column = 10},
+  }
+  positioned_forthic := Positioned_Forthic{forthic = "DUP", location = reference_location}
+
+  tokenizer: Tokenizer
+  tokenizer_init(&tokenizer, positioned_forthic)
+  defer tokenizer_destroy(&tokenizer)
+
+  token, err := tokenizer_next_token(&tokenizer)
+  defer delete(token.text)
+
+  testing.expect(t, err == nil)
+  testing.expect_value(t, token.location.start, Position{line = 5, column = 10})
+  testing.expect_value(t, token.location.end, Position{line = 5, column = 13})
+}
+
+@(test)
 test_comment :: proc(t: ^testing.T) {
   tokens := tokenize_all("DUP # This is a comment\nSWAP")
   defer delete_tokens(tokens)

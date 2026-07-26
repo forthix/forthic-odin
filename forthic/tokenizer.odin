@@ -41,6 +41,14 @@ Tokenizer :: struct {
 tokenizer_init :: proc(tokenizer: ^Tokenizer, positioned_forthic: Positioned_Forthic) {
   tokenizer.reference_location = positioned_forthic.location
   tokenizer.input_string = positioned_forthic.forthic
+
+  if ref_loc, ok := positioned_forthic.location.?; ok {
+    tokenizer.line = ref_loc.start.line
+    tokenizer.column = ref_loc.start.column
+  } else {
+    tokenizer.line = 1
+    tokenizer.column = 1
+  }
 }
 
 tokenizer_destroy :: proc(tokenizer: ^Tokenizer) {
