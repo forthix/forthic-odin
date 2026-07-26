@@ -1,8 +1,5 @@
 package forthic
 
-Forthic_Value :: struct {
-  todo: int
-}
 
 Interpreter :: struct {
     stack:  [dynamic]Forthic_Value,
