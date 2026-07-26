@@ -5,6 +5,7 @@ import "core:unicode/utf8"
 
 Token_Type :: enum {
   Word,
+  Comment,
   Eos,
 }
 
@@ -44,14 +45,13 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
     if !ok {
       break
     }
-    tokenizer_note_start_token(tokenizer)
 
     switch {
       case is_whitespace(ch):
         tokenizer_advance(tokenizer)
         continue
-      // case ch == '#':
-      //   return tokenizer_transition_from_comment(tokenizer)
+      case ch == '#':
+        return tokenizer_transition_from_comment(tokenizer)
       case:
         return tokenizer_transition_from_word(tokenizer)
     }
@@ -61,6 +61,8 @@ tokenizer_next_token :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
 
 
 tokenizer_transition_from_word :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  tokenizer_note_start_token(tokenizer)
+
   for tokenizer.byte_pos < len(tokenizer.input_string) {
     ch, ok := tokenizer_peek(tokenizer)
     if !ok || is_whitespace(ch) {
@@ -77,6 +79,24 @@ tokenizer_transition_from_word :: proc(tokenizer: ^Tokenizer) -> (Token, Error) 
   }, nil
 }
 
+tokenizer_transition_from_comment :: proc(tokenizer: ^Tokenizer) -> (Token, Error) {
+  tokenizer_note_start_token(tokenizer)
+
+  for tokenizer.byte_pos < len(tokenizer.input_string) {
+    ch, ok := tokenizer_peek(tokenizer)
+    if !ok || ch == '\n' {
+      break
+    }
+    tokenizer_advance(tokenizer)
+  }
+
+  text := strings.clone(tokenizer.input_string[tokenizer.token_start_pos:tokenizer.byte_pos])
+  return Token{
+    token_type = .Comment,
+    text = text,
+    location = tokenizer_token_location(tokenizer),
+  }, nil
+}
 
 // ----------------------------------------------------------------------------
 // Support
