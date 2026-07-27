@@ -1,6 +1,5 @@
 package forthic
 
-import "core:mem"
 import "core:strings"
 
 Module :: struct {
@@ -8,10 +7,10 @@ Module :: struct {
   words: [dynamic]Compiled_Word
 }
 
-module_create :: proc(name: string, allocator: mem.Allocator) -> ^Module {
-  module := new(Module, allocator)
-  module.name = strings.clone(name, allocator)
-  module.words = make([dynamic]Compiled_Word, 0, allocator)
+module_create :: proc(name: string) -> ^Module {
+  module := new(Module)
+  module.name = strings.clone(name)
+  module.words = make([dynamic]Compiled_Word, 0)
   return module
 }
 

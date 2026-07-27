@@ -22,6 +22,7 @@ Interpreter :: struct {
 
   // Memory management
   word_arena: virtual.Arena,
+  default_allocator: mem.Allocator,
 }
 
 interpreter_arena_allocator :: proc(interp: ^Interpreter) -> mem.Allocator {
@@ -29,12 +30,20 @@ interpreter_arena_allocator :: proc(interp: ^Interpreter) -> mem.Allocator {
 }
 
 interpreter_init :: proc(interp: ^Interpreter) {
-  _ = virtual.arena_init_growing(&interp.word_arena)
-  arena_alloc := interpreter_arena_allocator(interp)
+  // Pin the stack to the normal (non-arena) allocator *before* switching
+  // context.allocator below -- a [dynamic]T locks in whichever allocator
+  // is active the first time it actually allocates, and every later
+  // append/delete on it keeps using that same one regardless of what
+  // context.allocator becomes afterward.
+  interp.stack.items = make([dynamic]Forthic_Value, 0)
+  interp.default_allocator = context.allocator
 
-  app_module := module_create("", arena_alloc)
+  _ = virtual.arena_init_growing(&interp.word_arena)
+  context.allocator = interpreter_arena_allocator(interp)
+
+  app_module := module_create("")
   append(&app_module.words, Compiled_Word{
-    name = strings.clone("+", arena_alloc),
+    name = strings.clone("+"),
     action = Native_Word_Proc(native_plus),
   })
 
@@ -50,6 +59,8 @@ interpreter_destroy :: proc(interp: ^Interpreter) {
 
 
 interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_Forthic) -> Error {
+  context.allocator = interpreter_arena_allocator(interp)
+
   tokenizer :  Tokenizer
   tokenizer_init(&tokenizer, positioned_forthic)
   append(&interp.tokenizer_stack, tokenizer)
@@ -83,8 +94,8 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     return interpreter_handle_word_token(interp, token)
   case .StartDef:
     interp.is_compiling = true
-    interp.cur_definition_name = strings.clone(token.text, interpreter_arena_allocator(interp))
-    interp.cur_definition_body = make([dynamic]Compiled_Word, 0, interpreter_arena_allocator(interp))
+    interp.cur_definition_name = strings.clone(token.text)
+    interp.cur_definition_body = make([dynamic]Compiled_Word, 0)
     return nil
   case .EndDef:
     new_word := Compiled_Word{
@@ -109,10 +120,10 @@ interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token) -> Err
   // TODO: Add literal handlers
   int_val, ok := strconv.parse_i64(token.text)
   if ok {
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>", interpreter_arena_allocator(interp)), action = Forthic_Value(int_val)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>"), action = Forthic_Value(int_val)})
   }
 
-  return Unknown_Word{word = strings.clone(token.text), location = token.location}
+  return Unknown_Word{word = strings.clone(token.text, interp.default_allocator), location = token.location}
 }
 
 
