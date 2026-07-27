@@ -15,6 +15,9 @@ module_find_word :: proc(module: ^Module, name: string) -> (Compiled_Word, bool)
 }
 
 module_destroy :: proc(module: ^Module) {
+  for word in module.words {
+    compiled_word_destroy(word)
+  }
   delete(module.words)
   free(module)
 }

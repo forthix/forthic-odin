@@ -6,7 +6,7 @@ Native_Word_Proc :: proc(interp: ^Interpreter) -> Error
 Word_Action :: union {
   Native_Word_Proc,
   Forthic_Value,
-  // TODO: Add definition word execution
+  [dynamic]Compiled_Word,
 }
 
 Compiled_Word :: struct {
@@ -21,7 +21,27 @@ compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word) -> Erro
   case Forthic_Value:
     stack_push(&interp.stack, action)
     return nil
+  case [dynamic]Compiled_Word:
+    for w in action {
+      w_err := compiled_word_execute(interp, w)
+      if w_err != nil {
+        // TODO: Should we clean anything up here?
+        return w_err
+      }
+    }
   }
   return nil
+}
+
+
+compiled_word_destroy :: proc(word: Compiled_Word) {
+  delete(word.name)
+ #partial switch action in word.action {
+ case [dynamic]Compiled_Word:
+   for w in action {
+     compiled_word_destroy(w)
+   }
+   delete(action)
+ }
 }
 

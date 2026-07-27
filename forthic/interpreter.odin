@@ -4,9 +4,19 @@ import "core:strings"
 import "core:strconv"
 
 Interpreter :: struct {
-    stack:  Stack,
-    tokenizer_stack: [dynamic]Tokenizer,
-    module_stack: [dynamic]^Module,
+  // Parameter stack
+  stack:  Stack,
+
+  // Tokenizer stack (needed for when we do things like MAP or RUN
+  tokenizer_stack: [dynamic]Tokenizer,
+
+  // Modules can be opened up from other modules at runtime. This captures that nesting
+  module_stack: [dynamic]^Module,
+
+  // Compile support
+  is_compiling: bool,
+  cur_definition_name: string,
+  cur_definition_body: [dynamic]Compiled_Word
 }
 
 interpreter_init :: proc(interp: ^Interpreter) {
@@ -14,7 +24,7 @@ interpreter_init :: proc(interp: ^Interpreter) {
   app_module.name = ""
 
   append(&app_module.words, Compiled_Word{
-    name = "+",
+    name = strings.clone("+"),
     action = Native_Word_Proc(native_plus)
   })
 
@@ -63,6 +73,20 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   #partial switch token.token_type {
   case .Word:
     return interpreter_handle_word_token(interp, token)
+  case .StartDef:
+    interp.is_compiling = true
+    interp.cur_definition_name = strings.clone(token.text)
+    interp.cur_definition_body = nil
+    return nil
+  case .EndDef:
+    new_word := Compiled_Word{
+      name = interp.cur_definition_name,
+      action = interp.cur_definition_body,
+    }
+    top_module := interp.module_stack[len(interp.module_stack) - 1]
+    append(&top_module.words, new_word)
+    interp.is_compiling = false
+    return nil
   case:
      return nil
   }
@@ -71,17 +95,25 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
 interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   word, found := interpreter_find_word(interp, token.text)
   if found {
-    return compiled_word_execute(interp, word)
+    return interpreter_handle_word(interp, word)
   }
 
   // TODO: Add literal handlers
   int_val, ok := strconv.parse_i64(token.text)
   if ok {
-    stack_push(&interp.stack, Forthic_Value(int_val))
-    return nil
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>"), action = Forthic_Value(int_val)})
   }
 
   return Unknown_Word{word = strings.clone(token.text), location = token.location}
+}
+
+
+interpreter_handle_word :: proc(interp: ^Interpreter, word: Compiled_Word) -> Error {
+  if interp.is_compiling {
+    append(&interp.cur_definition_body, word)
+    return nil
+  }
+  return compiled_word_execute(interp, word)
 }
 
 
