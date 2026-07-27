@@ -15,6 +15,9 @@ Interpreter :: struct {
   // Modules can be opened up from other modules at runtime. This captures that nesting
   module_stack: [dynamic]^Module,
 
+  // Array/record support
+  collection_start_positions: [dynamic]Collection_Start,
+
   // Compile support
   is_compiling: bool,
   cur_definition_name: string,
@@ -106,6 +109,18 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     append(&top_module.words, new_word)
     interp.is_compiling = false
     return nil
+  case .DotSymbol:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(strings.clone(token.text))})
+  case .String:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))})
+  case .StartArray:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Native_Word_Proc(native_start_array)})
+  case .EndArray:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Native_Word_Proc(native_end_array)})
+  case .StartRecord:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Native_Word_Proc(native_start_record)})
+  case .EndRecord:
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Native_Word_Proc(native_end_record)})
   case:
      return nil
   }

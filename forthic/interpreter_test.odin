@@ -69,3 +69,48 @@ test_interpreter_definition_with_multiple_values :: proc(t: ^testing.T) {
   testing.expect(t, err_v1 == nil)
   testing.expect(t, forthic_value_equal(v1, Forthic_Value(i64(1))))
 }
+
+@(test)
+test_interpreter_array :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "[ 1 2 3 ]")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 1)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected: [dynamic]Forthic_Value
+  defer delete(expected)
+  append(&expected, Forthic_Value(i64(1)))
+  append(&expected, Forthic_Value(i64(2)))
+  append(&expected, Forthic_Value(i64(3)))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+@(test)
+test_interpreter_record :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .name \"Player One\" .score 100 }")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 1)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make(map[string]Forthic_Value)
+  defer delete(expected)
+  expected["name"] = Forthic_Value("Player One")
+  expected["score"] = Forthic_Value(i64(100))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
