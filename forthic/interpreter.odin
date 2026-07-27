@@ -2,6 +2,8 @@ package forthic
 
 import "core:strings"
 import "core:strconv"
+import "core:mem"
+import "core:mem/virtual"
 
 Interpreter :: struct {
   // Parameter stack
@@ -16,16 +18,24 @@ Interpreter :: struct {
   // Compile support
   is_compiling: bool,
   cur_definition_name: string,
-  cur_definition_body: [dynamic]Compiled_Word
+  cur_definition_body: [dynamic]Compiled_Word,
+
+  // Memory management
+  word_arena: virtual.Arena,
+}
+
+interpreter_arena_allocator :: proc(interp: ^Interpreter) -> mem.Allocator {
+  return virtual.arena_allocator(&interp.word_arena)
 }
 
 interpreter_init :: proc(interp: ^Interpreter) {
-  app_module := new(Module)
-  app_module.name = ""
+  _ = virtual.arena_init_growing(&interp.word_arena)
+  arena_alloc := interpreter_arena_allocator(interp)
 
+  app_module := module_create("", arena_alloc)
   append(&app_module.words, Compiled_Word{
-    name = strings.clone("+"),
-    action = Native_Word_Proc(native_plus)
+    name = strings.clone("+", arena_alloc),
+    action = Native_Word_Proc(native_plus),
   })
 
   append(&interp.module_stack, app_module)
@@ -34,10 +44,8 @@ interpreter_init :: proc(interp: ^Interpreter) {
 interpreter_destroy :: proc(interp: ^Interpreter) {
   stack_destroy(&interp.stack)
   delete(interp.tokenizer_stack)
-  for m in interp.module_stack {
-    module_destroy(m)
-  }
   delete(interp.module_stack)
+  virtual.arena_destroy(&interp.word_arena)
 }
 
 
@@ -75,8 +83,8 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     return interpreter_handle_word_token(interp, token)
   case .StartDef:
     interp.is_compiling = true
-    interp.cur_definition_name = strings.clone(token.text)
-    interp.cur_definition_body = nil
+    interp.cur_definition_name = strings.clone(token.text, interpreter_arena_allocator(interp))
+    interp.cur_definition_body = make([dynamic]Compiled_Word, 0, interpreter_arena_allocator(interp))
     return nil
   case .EndDef:
     new_word := Compiled_Word{
@@ -101,7 +109,7 @@ interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token) -> Err
   // TODO: Add literal handlers
   int_val, ok := strconv.parse_i64(token.text)
   if ok {
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>"), action = Forthic_Value(int_val)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>", interpreter_arena_allocator(interp)), action = Forthic_Value(int_val)})
   }
 
   return Unknown_Word{word = strings.clone(token.text), location = token.location}

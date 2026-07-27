@@ -1,8 +1,18 @@
 package forthic
 
+import "core:mem"
+import "core:strings"
+
 Module :: struct {
   name: string,
   words: [dynamic]Compiled_Word
+}
+
+module_create :: proc(name: string, allocator: mem.Allocator) -> ^Module {
+  module := new(Module, allocator)
+  module.name = strings.clone(name, allocator)
+  module.words = make([dynamic]Compiled_Word, 0, allocator)
+  return module
 }
 
 module_find_word :: proc(module: ^Module, name: string) -> (Compiled_Word, bool) {
@@ -12,12 +22,4 @@ module_find_word :: proc(module: ^Module, name: string) -> (Compiled_Word, bool)
    }
  }
  return {}, false
-}
-
-module_destroy :: proc(module: ^Module) {
-  for word in module.words {
-    compiled_word_destroy(word)
-  }
-  delete(module.words)
-  free(module)
 }

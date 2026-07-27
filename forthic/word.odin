@@ -33,15 +33,3 @@ compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word) -> Erro
   return nil
 }
 
-
-compiled_word_destroy :: proc(word: Compiled_Word) {
-  delete(word.name)
- #partial switch action in word.action {
- case [dynamic]Compiled_Word:
-   for w in action {
-     compiled_word_destroy(w)
-   }
-   delete(action)
- }
-}
-
