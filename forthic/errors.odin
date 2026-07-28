@@ -9,6 +9,8 @@ Error :: union {
   Invalid_Record,
   Unknown_Word,
   Division_By_Zero,
+  Missing_Semicolon,
+  Extra_Semicolon,
 }
 
 Unterminated_String :: struct {
@@ -44,5 +46,13 @@ Unknown_Word :: struct {
 }
 
 Division_By_Zero :: struct {
+  location: Code_Location,
+}
+
+Missing_Semicolon :: struct {
+  location: Code_Location,
+}
+
+Extra_Semicolon :: struct {
   location: Code_Location,
 }

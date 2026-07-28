@@ -9,6 +9,39 @@ run_forthic :: proc(interp: ^Interpreter, forthic: string) -> Error {
 }
 
 @(test)
+test_interpreter_missing_semicolon :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, ": UNCLOSED 42")
+  _, is_missing := err.(Missing_Semicolon)
+  testing.expect(t, is_missing)
+}
+
+@(test)
+test_interpreter_nested_definition_missing_semicolon :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, ": A : B ;")
+  _, is_missing := err.(Missing_Semicolon)
+  testing.expect(t, is_missing)
+}
+
+@(test)
+test_interpreter_extra_semicolon :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "42 ;")
+  _, is_extra := err.(Extra_Semicolon)
+  testing.expect(t, is_extra)
+}
+
+@(test)
 test_interpreter_add :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)

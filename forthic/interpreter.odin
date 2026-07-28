@@ -76,6 +76,9 @@ interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_For
       return err
     }
     if token.token_type == .Eos {
+      if interp.is_compiling {
+        return Missing_Semicolon{location = token.location}
+      }
       break
     }
 
@@ -96,12 +99,16 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     clear(&interp.pending_doc_lines)
   }
 
+  // Handle each token
   #partial switch token.token_type {
   case .Word:
     return interpreter_handle_word_token(interp, token)
   case .Comment:
     return interpreter_handle_comment_token(interp, token)
   case .StartDef:
+    if interp.is_compiling {
+      return Missing_Semicolon{location = token.location}
+    }
     interp.is_compiling = true
     interp.cur_definition_name = strings.clone(token.text)
     interp.cur_definition_body = make([dynamic]Compiled_Word, 0)
@@ -111,6 +118,9 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     }
     return nil
   case .EndDef:
+    if !interp.is_compiling {
+      return Extra_Semicolon{location = token.location}
+    }
     new_word := Compiled_Word{
       name = interp.cur_definition_name,
       action = interp.cur_definition_body,
