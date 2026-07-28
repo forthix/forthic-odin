@@ -9,9 +9,17 @@ Word_Action :: union {
   [dynamic]Compiled_Word,
 }
 
+
+Word_Doc :: struct {
+  stack_effect: string,
+  description: string,
+  examples: []string,
+}
+
 Compiled_Word :: struct {
   name: string,
-  action: Word_Action
+  action: Word_Action,
+  doc: Maybe(Word_Doc),
 }
 
 compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word) -> Error {

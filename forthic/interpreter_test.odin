@@ -94,6 +94,28 @@ test_interpreter_array :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_interpreter_word_doc :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  forthic := "#: Adds two to a number.\n#: @effect ( n -- n+2 )\n#: @example 5 PLUS-TWO  # => 7\n: PLUS-TWO 2 + ;"
+  err := run_forthic(&interp, forthic)
+  testing.expect(t, err == nil)
+
+  app_module := interp.module_stack[0]
+  word, found := module_find_word(app_module, "PLUS-TWO")
+  testing.expect(t, found)
+
+  doc, has_doc := word.doc.?
+  testing.expect(t, has_doc)
+  testing.expect_value(t, doc.description, "Adds two to a number.")
+  testing.expect_value(t, doc.stack_effect, "( n -- n+2 )")
+  testing.expect_value(t, len(doc.examples), 1)
+  testing.expect_value(t, doc.examples[0], "5 PLUS-TWO  # => 7")
+}
+
+@(test)
 test_interpreter_record :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)

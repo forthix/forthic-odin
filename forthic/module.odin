@@ -14,6 +14,29 @@ module_create :: proc(name: string) -> ^Module {
   return module
 }
 
+module_add_word :: proc(module: ^Module, word: Compiled_Word) {
+  append(&module.words, word)
+}
+
+module_add_native_word :: proc(
+  module: ^Module, 
+  name: string,
+  handler: Native_Word_Proc,
+  stack_effect: string,
+  description: string,
+  examples: []string,
+) {
+  module_add_word(module, Compiled_Word{
+    name = strings.clone(name),
+    action = Native_Word_Proc(handler),
+    doc = Word_Doc{
+      stack_effect = stack_effect,
+      description = description,
+      examples = examples,
+    },
+  })
+}
+
 module_find_word :: proc(module: ^Module, name: string) -> (Compiled_Word, bool) {
  #reverse  for word in module.words {
    if word.name == name {
@@ -21,4 +44,10 @@ module_find_word :: proc(module: ^Module, name: string) -> (Compiled_Word, bool)
    }
  }
  return {}, false
+}
+
+module_import_words :: proc(dest: ^Module, src: ^Module) {
+  for word in src.words {
+    module_add_word(dest, word)
+  }
 }

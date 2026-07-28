@@ -22,6 +22,8 @@ Interpreter :: struct {
   is_compiling: bool,
   cur_definition_name: string,
   cur_definition_body: [dynamic]Compiled_Word,
+  pending_doc_lines: [dynamic]string,
+  pending_word_doc: Maybe(Word_Doc),
 
   // Memory management
   word_arena: virtual.Arena,
@@ -45,10 +47,7 @@ interpreter_init :: proc(interp: ^Interpreter) {
   context.allocator = interpreter_arena_allocator(interp)
 
   app_module := module_create("")
-  append(&app_module.words, Compiled_Word{
-    name = strings.clone("+"),
-    action = Native_Word_Proc(native_plus),
-  })
+  module_import_words(app_module, core_module_create()) 
 
   append(&interp.module_stack, app_module)
 }
@@ -92,22 +91,35 @@ interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_For
 }
 
 interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
+  // Clear out pending doc lines if not a comment or start definition
+  if token.token_type != .Comment && token.token_type != .StartDef && len(interp.pending_doc_lines) > 0 {
+    clear(&interp.pending_doc_lines)
+  }
+
   #partial switch token.token_type {
   case .Word:
     return interpreter_handle_word_token(interp, token)
+  case .Comment:
+    return interpreter_handle_comment_token(interp, token)
   case .StartDef:
     interp.is_compiling = true
     interp.cur_definition_name = strings.clone(token.text)
     interp.cur_definition_body = make([dynamic]Compiled_Word, 0)
+    if len(interp.pending_doc_lines) > 0 {
+      interp.pending_word_doc = interpreter_parse_pending_doc(interp)
+      clear(&interp.pending_doc_lines)
+    }
     return nil
   case .EndDef:
     new_word := Compiled_Word{
       name = interp.cur_definition_name,
       action = interp.cur_definition_body,
+      doc = interp.pending_word_doc,
     }
     top_module := interp.module_stack[len(interp.module_stack) - 1]
-    append(&top_module.words, new_word)
+    module_add_word(top_module, new_word)
     interp.is_compiling = false
+    interp.pending_word_doc = nil
     return nil
   case .DotSymbol:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(strings.clone(token.text))})
@@ -150,6 +162,17 @@ interpreter_handle_word :: proc(interp: ^Interpreter, word: Compiled_Word) -> Er
   return compiled_word_execute(interp, word)
 }
 
+interpreter_handle_comment_token :: proc(interp: ^Interpreter, token: Token) -> Error {
+  if strings.has_prefix(token.text, "#:") {
+    line := strings.trim_left_space(strings.trim_prefix(token.text, "#:"))
+    append(&interp.pending_doc_lines, strings.clone(line))
+  }
+  else {
+    clear(&interp.pending_doc_lines)
+  }
+  return nil
+}
+
 
 interpreter_find_word :: proc(interp: ^Interpreter, name: string) -> (Compiled_Word, bool) {
  #reverse for m in interp.module_stack {
@@ -159,4 +182,28 @@ interpreter_find_word :: proc(interp: ^Interpreter, name: string) -> (Compiled_W
    }
  }
  return {}, false
+}
+
+interpreter_parse_pending_doc :: proc(interp: ^Interpreter) -> Word_Doc {
+  stack_effect: string
+  examples: [dynamic]string
+  description_lines: [dynamic]string
+
+  for line in interp.pending_doc_lines {
+    if strings.has_prefix(line, "@effect") {
+      stack_effect = strings.trim_left_space(strings.trim_prefix(line, "@effect"))
+    }
+    else if strings.has_prefix(line, "@example") {
+      append(&examples, strings.trim_left_space(strings.trim_prefix(line, "@example")))
+    }
+    else {
+      append(&description_lines, line)
+    }
+  }
+
+  return Word_Doc{
+    stack_effect = stack_effect,
+    description = strings.join(description_lines[:], " "),
+    examples = examples[:],
+  }
 }

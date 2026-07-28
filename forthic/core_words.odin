@@ -1,5 +1,12 @@
 package forthic
 
+core_module_create :: proc() -> ^Module {
+  core_module := module_create("core")
+
+  module_add_native_word(core_module, "+", native_plus, "( a:number b:number -- sum:number )", "Add two numbers", {})
+  return core_module
+}
+
 native_plus :: proc(interp: ^Interpreter) -> Error {
   r_val, r_error := stack_pop(&interp.stack)
   if r_error != nil {
