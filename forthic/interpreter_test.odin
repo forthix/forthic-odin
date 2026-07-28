@@ -25,6 +25,46 @@ test_interpreter_add :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_interpreter_dup :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "5 DUP")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 2)
+
+  top, top_err := stack_pop(&interp.stack)
+  testing.expect(t, top_err == nil)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(5))))
+
+  second, second_err := stack_pop(&interp.stack)
+  testing.expect(t, second_err == nil)
+  testing.expect(t, forthic_value_equal(second, Forthic_Value(i64(5))))
+}
+
+@(test)
+test_interpreter_swap :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 2 SWAP")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 2)
+
+  top, top_err := stack_pop(&interp.stack)
+  testing.expect(t, top_err == nil)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(1))))
+
+  second, second_err := stack_pop(&interp.stack)
+  testing.expect(t, second_err == nil)
+  testing.expect(t, forthic_value_equal(second, Forthic_Value(i64(2))))
+}
+
+@(test)
 test_interpreter_simple_definition :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
