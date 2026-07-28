@@ -25,6 +25,112 @@ test_interpreter_add :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_interpreter_subtract :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "5 3 -")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(2))))
+}
+
+@(test)
+test_interpreter_multiply :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "4 3 *")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(12))))
+}
+
+@(test)
+test_interpreter_divide_exact :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "6 3 /")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(2))))
+}
+
+@(test)
+test_interpreter_divide_fractional :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "7 2 /")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(f64(3.5))))
+}
+
+@(test)
+test_interpreter_divide_by_zero :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "5 0 /")
+  _, is_div_by_zero := err.(Division_By_Zero)
+  testing.expect(t, is_div_by_zero)
+}
+
+@(test)
+test_interpreter_add_type_mismatch :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "\"a\" 3 +")
+  mismatch, is_mismatch := err.(Type_Mismatch)
+  testing.expect(t, is_mismatch)
+  testing.expect_value(t, mismatch.note, "+ requires two numbers")
+}
+
+@(test)
+test_interpreter_drop :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 2 DROP")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 1)
+
+  top, top_err := stack_pop(&interp.stack)
+  testing.expect(t, top_err == nil)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(1))))
+}
+
+@(test)
+test_interpreter_drop_empty_stack :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "DROP")
+  _, is_underflow := err.(Stack_Underflow)
+  testing.expect(t, is_underflow)
+}
+
+@(test)
 test_interpreter_dup :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)

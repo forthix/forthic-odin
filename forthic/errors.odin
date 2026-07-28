@@ -8,6 +8,7 @@ Error :: union {
   Mismatched_Collection,
   Invalid_Record,
   Unknown_Word,
+  Division_By_Zero,
 }
 
 Unterminated_String :: struct {
@@ -39,5 +40,9 @@ Invalid_Record :: struct {
 
 Unknown_Word :: struct {
   word: string,
+  location: Code_Location,
+}
+
+Division_By_Zero :: struct {
   location: Code_Location,
 }
