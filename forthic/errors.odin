@@ -11,6 +11,7 @@ Error :: union {
   Division_By_Zero,
   Missing_Semicolon,
   Extra_Semicolon,
+  Extra_End_Module,
 }
 
 Unterminated_String :: struct {
@@ -54,5 +55,9 @@ Missing_Semicolon :: struct {
 }
 
 Extra_Semicolon :: struct {
+  location: Code_Location,
+}
+
+Extra_End_Module :: struct {
   location: Code_Location,
 }

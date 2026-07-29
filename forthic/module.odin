@@ -4,7 +4,10 @@ import "core:strings"
 
 Module :: struct {
   name: string,
-  words: [dynamic]Compiled_Word
+  words: [dynamic]Compiled_Word,
+
+  submodules: map[string]^Module,
+  requires_ui_thread: bool,
 }
 
 module_create :: proc(name: string) -> ^Module {
@@ -50,4 +53,15 @@ module_import_words :: proc(dest: ^Module, src: ^Module) {
   for word in src.words {
     module_add_word(dest, word)
   }
+}
+
+module_find_or_create_submodule :: proc(module: ^Module, name: string) -> ^Module {
+  existing_submodule, found := module.submodules[name]
+  if found {
+    return existing_submodule
+  }
+
+  new_submodule := module_create(name)
+  module.submodules[name] = new_submodule
+  return new_submodule
 }

@@ -12,6 +12,10 @@ core_module_create :: proc() -> ^Module {
   module_add_native_word(core_module, "*", native_multiply, "( a:number b:number -- product:number )", "Multiplies two numbers", {})
   module_add_native_word(core_module, "/", native_divide, "( a:number b:number -- quotient:number )", "Divides two numbers", {})
 
+  module_add_native_word(core_module, "MODULE", native_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
+  module_add_native_word(core_module, "END-MODULE", native_end_module, "( -- )", "Pop the current module from the module stack", {})
+  module_add_native_word(core_module, "APP-MODULE", native_app_module, "( -- )", "Make the application module the current module", {})
+
   return core_module
 }
 

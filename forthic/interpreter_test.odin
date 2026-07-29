@@ -295,6 +295,123 @@ test_interpreter_word_doc :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_interpreter_module_creates_submodule :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "\"raylib\" MODULE")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, len(interp.module_stack), 2)
+
+  app_module := interp.module_stack[0]
+  top_module := interp.module_stack[1]
+  testing.expect_value(t, top_module.name, "raylib")
+  testing.expect(t, top_module == app_module.submodules["raylib"])
+}
+
+@(test)
+test_interpreter_module_end_module :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "\"raylib\" MODULE END-MODULE")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, len(interp.module_stack), 1)
+  testing.expect(t, interp.module_stack[0] == interp.module_stack[len(interp.module_stack) - 1])
+}
+
+@(test)
+test_interpreter_module_scopes_definition :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "\"raylib\" MODULE : GREET \"hi\" ; END-MODULE")
+  testing.expect(t, err == nil)
+
+  app_module := interp.module_stack[0]
+  raylib_module := app_module.submodules["raylib"]
+
+  _, found_in_app := module_find_word(app_module, "GREET")
+  testing.expect(t, !found_in_app)
+
+  _, found_in_raylib := module_find_word(raylib_module, "GREET")
+  testing.expect(t, found_in_raylib)
+}
+
+@(test)
+test_interpreter_module_requires_string_name :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "42 MODULE")
+  _, is_mismatch := err.(Type_Mismatch)
+  testing.expect(t, is_mismatch)
+}
+
+@(test)
+test_interpreter_module_empty_stack :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "MODULE")
+  _, is_underflow := err.(Stack_Underflow)
+  testing.expect(t, is_underflow)
+}
+
+@(test)
+test_interpreter_app_module :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "\"raylib\" MODULE APP-MODULE")
+  testing.expect(t, err == nil)
+
+  testing.expect_value(t, len(interp.module_stack), 3)
+  testing.expect(t, interp.module_stack[2] == interp.module_stack[0])
+
+  err2 := run_forthic(&interp, "END-MODULE")
+  testing.expect(t, err2 == nil)
+  testing.expect_value(t, len(interp.module_stack), 2)
+  testing.expect_value(t, interp.module_stack[1].name, "raylib")
+}
+
+@(test)
+test_interpreter_end_module_extra :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "END-MODULE")
+  _, is_extra := err.(Extra_End_Module)
+  testing.expect(t, is_extra)
+}
+
+@(test)
+test_interpreter_module_reopen_reuses_submodule :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err1 := run_forthic(&interp, "\"raylib\" MODULE : GREET \"hi\" ; END-MODULE")
+  testing.expect(t, err1 == nil)
+
+  err2 := run_forthic(&interp, "\"raylib\" MODULE")
+  testing.expect(t, err2 == nil)
+
+  reopened_module := interp.module_stack[len(interp.module_stack) - 1]
+  _, found := module_find_word(reopened_module, "GREET")
+  testing.expect(t, found)
+}
+
+@(test)
 test_interpreter_record :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
