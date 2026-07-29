@@ -25,18 +25,23 @@ Compiled_Word :: struct {
 compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word) -> Error {
   switch action in word.action {
   case Native_Word_Proc:
-    return action(interp)
+    err := action(interp)
+    if word.name != "~>" {
+      interp.pending_word_options = nil
+    }
+    return err
   case Forthic_Value:
     stack_push(&interp.stack, action)
+    interp.pending_word_options = nil
     return nil
   case [dynamic]Compiled_Word:
     for w in action {
       w_err := compiled_word_execute(interp, w)
       if w_err != nil {
-        // TODO: Should we clean anything up here?
         return w_err
       }
     }
+    interp.pending_word_options = nil
   }
   return nil
 }

@@ -3,6 +3,8 @@ package forthic
 core_module_create :: proc() -> ^Module {
   core_module := module_create("core")
 
+  module_add_native_word(core_module, "~>", native_set_options, "( options -- )", "Sets pending word options", {})
+
   module_add_native_word(core_module, "DROP", native_drop, "( a -- )", "Drops top of stack", {})
   module_add_native_word(core_module, "DUP", native_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
   module_add_native_word(core_module, "SWAP", native_swap, "( a b -- b a )", "Swap the top two stack items", {"1 2 SWAP  # => 2 1"})

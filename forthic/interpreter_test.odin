@@ -494,6 +494,55 @@ test_interpreter_literal_inside_definition_not_pushed_early :: proc(t: ^testing.
 }
 
 @(test)
+test_interpreter_to_options_sets_pending_word_options :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .width 800 } ~>")
+  testing.expect(t, err == nil)
+
+  options, has_options := interp.pending_word_options.?
+  testing.expect(t, has_options)
+  testing.expect_value(t, word_options_get_int(options, "width", 0), i64(800))
+}
+
+@(test)
+test_interpreter_to_options_requires_record :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "42 ~>")
+  _, is_mismatch := err.(Type_Mismatch)
+  testing.expect(t, is_mismatch)
+}
+
+@(test)
+test_interpreter_to_options_empty_stack :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "~>")
+  _, is_underflow := err.(Stack_Underflow)
+  testing.expect(t, is_underflow)
+}
+
+@(test)
+test_interpreter_pending_word_options_cleared_after_next_word :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "5 { .width 800 } ~> DUP")
+  testing.expect(t, err == nil)
+
+  _, has_options := interp.pending_word_options.?
+  testing.expect(t, !has_options)
+}
+
+@(test)
 test_interpreter_record :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)

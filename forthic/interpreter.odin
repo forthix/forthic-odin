@@ -20,6 +20,8 @@ Interpreter :: struct {
 
   literal_handlers: [dynamic]Literal_Handler,
 
+  pending_word_options: Maybe(Word_Options),
+
   // Compile support
   is_compiling: bool,
   cur_definition_name: string,
