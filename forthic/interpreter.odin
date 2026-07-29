@@ -18,6 +18,8 @@ Interpreter :: struct {
   // Array/record support
   collection_start_positions: [dynamic]Collection_Start,
 
+  literal_handlers: [dynamic]Literal_Handler,
+
   // Compile support
   is_compiling: bool,
   cur_definition_name: string,
@@ -50,6 +52,12 @@ interpreter_init :: proc(interp: ^Interpreter) {
   module_import_words(app_module, core_module_create()) 
 
   append(&interp.module_stack, app_module)
+
+  // Specify literal handlers
+  append(&interp.literal_handlers, literal_to_bool)
+  append(&interp.literal_handlers, literal_to_float)
+  append(&interp.literal_handlers, literal_to_int)
+
 }
 
 interpreter_destroy :: proc(interp: ^Interpreter) {
@@ -154,10 +162,12 @@ interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token) -> Err
     return interpreter_handle_word(interp, word)
   }
 
-  // TODO: Add literal handlers
-  int_val, ok := strconv.parse_i64(token.text)
-  if ok {
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<int>"), action = Forthic_Value(int_val)})
+  // Check literals
+  for literal_handler in interp.literal_handlers {
+    value, ok := literal_handler(token.text)
+    if ok {
+      return interpreter_handle_word(interp, Compiled_Word{name = strings.clone(token.text), action = value})
+    }
   }
 
   return Unknown_Word{word = strings.clone(token.text, interp.default_allocator), location = token.location}

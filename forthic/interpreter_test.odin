@@ -412,6 +412,88 @@ test_interpreter_module_reopen_reuses_submodule :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_interpreter_bool_literal_true :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "TRUE")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(bool(true))))
+}
+
+@(test)
+test_interpreter_bool_literal_false :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "FALSE")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(bool(false))))
+}
+
+@(test)
+test_interpreter_float_literal :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "3.14")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(f64(3.14))))
+}
+
+@(test)
+test_interpreter_negative_int_literal :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "-10")
+  testing.expect(t, err == nil)
+
+  top, ok := stack_peek(&interp.stack)
+  testing.expect(t, ok)
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(i64(-10))))
+}
+
+@(test)
+test_interpreter_literal_inside_definition_not_pushed_early :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err1 := run_forthic(&interp, ": PI 3.14 ;")
+  testing.expect(t, err1 == nil)
+
+  // Defining the word must not push its literal onto the stack.
+  testing.expect_value(t, stack_len(&interp.stack), 0)
+
+  err2 := run_forthic(&interp, "PI PI")
+  testing.expect(t, err2 == nil)
+
+  testing.expect_value(t, stack_len(&interp.stack), 2)
+
+  v2, err_v2 := stack_pop(&interp.stack)
+  testing.expect(t, err_v2 == nil)
+  testing.expect(t, forthic_value_equal(v2, Forthic_Value(f64(3.14))))
+
+  v1, err_v1 := stack_pop(&interp.stack)
+  testing.expect(t, err_v1 == nil)
+  testing.expect(t, forthic_value_equal(v1, Forthic_Value(f64(3.14))))
+}
+
+@(test)
 test_interpreter_record :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
