@@ -6,7 +6,7 @@ native_set_options :: proc(interp: ^Interpreter) -> Error {
     return err
   }
 
-  record, is_record := value.(map[string]Forthic_Value)
+  record, is_record := value.(Record)
   if !is_record {
     return Type_Mismatch{ note = "options should be a record", location = Code_Location{} }
   }

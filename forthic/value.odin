@@ -1,12 +1,16 @@
 package forthic
 
+Dot_Symbol :: distinct string
+Record :: map[Dot_Symbol]Forthic_Value
+
 Forthic_Value :: union {
   bool,
   i64,
   f64,
   string,
+  Dot_Symbol,
+  Record,
   [dynamic]Forthic_Value,
-  map[string]Forthic_Value
 }
 
 forthic_value_equal :: proc(a, b: Forthic_Value) -> bool {
@@ -23,6 +27,9 @@ forthic_value_equal :: proc(a, b: Forthic_Value) -> bool {
   case string:
     vb, ok := b.(string)
     return ok  && va == vb
+  case Dot_Symbol:
+    vb, ok := b.(Dot_Symbol)
+    return ok  && va == vb
   case [dynamic]Forthic_Value:
     vb, ok := b.([dynamic]Forthic_Value)
     if !ok || len(va) != len(vb) {
@@ -34,8 +41,8 @@ forthic_value_equal :: proc(a, b: Forthic_Value) -> bool {
       }
     }
     return true
-  case map[string]Forthic_Value:
-    vb, ok := b.(map[string]Forthic_Value)
+  case Record:
+    vb, ok := b.(Record)
     if !ok || len(va) != len(vb) {
       return false
     }

@@ -1,10 +1,10 @@
 package forthic
 
 Word_Options :: struct {
-  values: map[string]Forthic_Value,
+  values: Record,
 }
 
-word_options_from_record :: proc(record: map[string]Forthic_Value) -> Word_Options {
+word_options_from_record :: proc(record: Record) -> Word_Options {
   return Word_Options{ values = record}
 }
 
@@ -25,7 +25,7 @@ word_options_get_string :: proc(options: Word_Options, name: string, default: st
 }
 
 word_options_get :: proc(options: Word_Options, name: string, default: $T) -> T {
-  value, is_present := options.values[name]
+  value, is_present := options.values[Dot_Symbol(name)]
   if !is_present {
     return default
   }

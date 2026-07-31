@@ -56,10 +56,6 @@ native_end_record :: proc(interp: ^Interpreter) -> Error {
     return Stack_Underflow{}
   }
 
-  if count % 2 != 0 {
-    return Invalid_Record{ count = count }
-  }
-
   items := make([dynamic]Forthic_Value, 0, count)
   defer delete(items)
   for _ in 0..<count {
@@ -71,14 +67,28 @@ native_end_record :: proc(interp: ^Interpreter) -> Error {
   }
   slice.reverse(items[:])
 
-  // Convert into record and push onto stack
-  record := make(map[string]Forthic_Value)
-  for i := 0; i < count; i += 2 {
-    key, ok := items[i].(string)
+  // Convert into record and push onto stack.
+  // A bare flag (a Dot_Symbol key with no following value -- either
+  // because another key follows immediately, or because it is the last
+  // item) defaults to `true`.
+  record := make(Record)
+  i := 0
+  for i < count {
+    key, ok := items[i].(Dot_Symbol)
     if !ok {
-      return Type_Mismatch{note = "Record keys must be strings"}
+      return Type_Mismatch{note = "Record keys must be Dot_Symbols"}
     }
-    record[key] = items[i + 1]
+
+    if i + 1 < count {
+      if _, next_is_key := items[i + 1].(Dot_Symbol); !next_is_key {
+        record[key] = items[i + 1]
+        i += 2
+        continue
+      }
+    }
+
+    record[key] = Forthic_Value(bool(true))
+    i += 1
   }
 
   stack_push(&interp.stack, Forthic_Value(record))

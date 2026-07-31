@@ -6,7 +6,6 @@ Error :: union {
   Stack_Underflow,
   Type_Mismatch,
   Mismatched_Collection,
-  Invalid_Record,
   Unknown_Word,
   Division_By_Zero,
   Missing_Semicolon,
@@ -33,11 +32,6 @@ Type_Mismatch :: struct {
 Mismatched_Collection :: struct {
   expected: Collection_Kind,
   got: Collection_Kind,
-  location: Code_Location,
-}
-
-Invalid_Record :: struct {
-  count: int,
   location: Code_Location,
 }
 

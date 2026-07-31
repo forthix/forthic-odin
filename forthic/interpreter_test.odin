@@ -543,6 +543,76 @@ test_interpreter_pending_word_options_cleared_after_next_word :: proc(t: ^testin
 }
 
 @(test)
+test_interpreter_record_bare_flag_at_end :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .a 1 .flag }")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make(Record)
+  defer delete(expected)
+  expected["a"] = Forthic_Value(i64(1))
+  expected["flag"] = Forthic_Value(bool(true))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+@(test)
+test_interpreter_record_consecutive_bare_flags :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .flag .other }")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make(Record)
+  defer delete(expected)
+  expected["flag"] = Forthic_Value(bool(true))
+  expected["other"] = Forthic_Value(bool(true))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+@(test)
+test_interpreter_record_all_bare_flags :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .flag }")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make(Record)
+  defer delete(expected)
+  expected["flag"] = Forthic_Value(bool(true))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+@(test)
+test_interpreter_record_key_must_be_dot_symbol :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ \"not-a-key\" 5 }")
+  _, is_mismatch := err.(Type_Mismatch)
+  testing.expect(t, is_mismatch)
+}
+
+@(test)
 test_interpreter_record :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
@@ -556,9 +626,9 @@ test_interpreter_record :: proc(t: ^testing.T) {
   top, pop_err := stack_pop(&interp.stack)
   testing.expect(t, pop_err == nil)
 
-  expected := make(map[string]Forthic_Value)
+  expected := make(Record)
   defer delete(expected)
-  expected["name"] = Forthic_Value("Player One")
+  expected["name"] = Forthic_Value(string("Player One"))
   expected["score"] = Forthic_Value(i64(100))
 
   testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))

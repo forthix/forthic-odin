@@ -142,7 +142,8 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
     interp.pending_word_doc = nil
     return nil
   case .DotSymbol:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(strings.clone(token.text))})
+    new_value : Dot_Symbol = Dot_Symbol(strings.clone(token.text))
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(new_value)})
   case .String:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))})
   case .StartArray:

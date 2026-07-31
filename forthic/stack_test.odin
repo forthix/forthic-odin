@@ -17,13 +17,13 @@ test_stack_push_pop :: proc(t: ^testing.T) {
   defer stack_destroy(&stack)
 
   stack_push(&stack, Forthic_Value(i64(42)))
-  stack_push(&stack, Forthic_Value("hello"))
+  stack_push(&stack, Forthic_Value(string("hello")))
 
   testing.expect_value(t, stack_len(&stack), 2)
 
   top, top_err := stack_pop(&stack)
   testing.expect(t, top_err == nil)
-  testing.expect(t, forthic_value_equal(top, Forthic_Value("hello")))
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(string("hello"))))
 
   next, next_err := stack_pop(&stack)
   testing.expect(t, next_err == nil)
