@@ -55,6 +55,14 @@ module_import_words :: proc(dest: ^Module, src: ^Module) {
   }
 }
 
+module_import_words_prefixed :: proc(dest: ^Module, src: ^Module, prefix: string) {
+  for word in src.words {
+    prefixed_word := word
+    prefixed_word.name = strings.concatenate({prefix, ".", word.name})
+    module_add_word(dest, prefixed_word)
+  }
+}
+
 module_find_or_create_submodule :: proc(module: ^Module, name: string) -> ^Module {
   existing_submodule, found := module.submodules[name]
   if found {
