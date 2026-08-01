@@ -75,6 +75,10 @@ record_get_string :: proc(record: Record, name: string, default: string) -> stri
   return record_get(record, name, default)
 }
 
+record_get_record :: proc(record: Record, name: string, default: Record) -> Record {
+  return record_get(record, name, default)
+}
+
 record_get :: proc(record: Record, name: string, default: $T) -> T {
   value, is_present := record[Dot_Symbol(name)]
   if !is_present {

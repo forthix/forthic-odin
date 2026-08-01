@@ -23,14 +23,14 @@ main :: proc() {
     }
   }
 
-  init_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"INITIALIZE-APP REGISTER-HANDLERS", nil})
+  init_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP ON-REGISTER-HANDLERS", nil})
   if init_err != nil {
     fmt.println(init_err)
     os.exit(1)
   }
 
   for !raylib.WindowShouldClose() {
-    frame_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"DRAW-FRAME", nil})
+    frame_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"ON-DRAW-FRAME", nil})
     if frame_err != nil {
       fmt.println(frame_err)
       os.exit(1)
