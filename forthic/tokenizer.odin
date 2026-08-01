@@ -292,6 +292,7 @@ tokenizer_transition_from_start_memo :: proc(tokenizer: ^Tokenizer) -> (Token, E
 
 // ----------------------------------------------------------------------------
 // Support
+// ----------------------------------------------------------------------------
 
 
 tokenizer_transition_single_char :: proc(tokenizer: ^Tokenizer, token_type: Token_Type) -> (Token, Error) {

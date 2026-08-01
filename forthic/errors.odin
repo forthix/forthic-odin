@@ -1,5 +1,7 @@
 package forthic
 
+import "core:os"
+
 Error :: union {
   Unterminated_String,
   Invalid_Word_Name,
@@ -11,6 +13,7 @@ Error :: union {
   Missing_Semicolon,
   Extra_Semicolon,
   Extra_End_Module,
+  Read_File_Error,
 }
 
 Unterminated_String :: struct {
@@ -54,4 +57,9 @@ Extra_Semicolon :: struct {
 
 Extra_End_Module :: struct {
   location: Code_Location,
+}
+
+Read_File_Error :: struct {
+  path: string,
+  err: os.Error,
 }

@@ -55,3 +55,16 @@ stack_dup :: proc(stack: ^Stack) -> Stack {
 stack_is_empty :: proc(stack: ^Stack) -> bool {
   return len(stack.items) == 0
 }
+
+stack_pop_record :: proc(stack: ^Stack, note: string) -> (Record, Error) {
+  value, err := stack_pop(stack)
+  if err != nil {
+    return nil, err
+  }
+
+  record, is_record := value.(Record)
+  if !is_record {
+    return nil, Type_Mismatch{ note = note }
+  }
+  return record, nil
+}

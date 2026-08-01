@@ -1,0 +1,14 @@
+: RED     { .r 200 .g 50 .b 50 .a 255 };
+: BLACK   { .r 0 .g 0 .b 0 .a 255 };
+
+: ON-INITIALIZE-APP    { .width 800 .height 600 .title "Forthic Demo" } raylib.INIT-WINDOW ;
+
+: ON-REGISTER-HANDLERS   ;
+
+: ON-DRAW-FRAME
+    raylib.BEGIN-DRAWING
+    { .r 245 .g 245 .b 245 .a 255 } raylib.CLEAR-BACKGROUND
+    { .x 300 .y 200 .width 200 .height 100 .color RED } raylib.DRAW-RECTANGLE
+    { .text "Hello, Forthic!" .posX 300 .posY 320 .fontSize 24 .color BLACK } raylib.DRAW-TEXT
+    raylib.END-DRAWING
+;

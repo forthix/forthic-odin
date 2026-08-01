@@ -16,6 +16,14 @@ main :: proc() {
   forthic.interpreter_init(&interp)
   defer forthic.interpreter_destroy(&interp)
 
+  // Run file if provided
+  if len(os.args) > 1 {
+    err := forthic.interpreter_run_file(&interp, os.args[1])
+    if err != nil {
+      fmt.println(err)
+    }
+
+  }
   for {
     fmt.print("forthic> ")
 

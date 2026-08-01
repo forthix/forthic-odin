@@ -504,7 +504,7 @@ test_interpreter_to_options_sets_pending_word_options :: proc(t: ^testing.T) {
 
   options, has_options := interp.pending_word_options.?
   testing.expect(t, has_options)
-  testing.expect_value(t, word_options_get_int(options, "width", 0), i64(800))
+  testing.expect_value(t, record_get_int(Record(options), "width", 0), i64(800))
 }
 
 @(test)
