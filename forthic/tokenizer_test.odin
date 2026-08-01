@@ -170,19 +170,31 @@ test_dot_symbol :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_module :: proc(t: ^testing.T) {
-  tokens := tokenize_all("{ : WORD 42 ; }")
+test_record_no_space_after_brace :: proc(t: ^testing.T) {
+  tokens := tokenize_all("{.name 1}")
   defer delete_tokens(tokens)
 
-  testing.expect_value(t, tokens[0].token_type, Token_Type.StartModule)
+  testing.expect_value(t, len(tokens), 4)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartRecord)
+  testing.expect_value(t, tokens[0].text, "{")
+  testing.expect_value(t, tokens[1].token_type, Token_Type.DotSymbol)
+  testing.expect_value(t, tokens[1].text, "name")
+  testing.expect_value(t, tokens[2].token_type, Token_Type.Word)
+  testing.expect_value(t, tokens[3].token_type, Token_Type.EndRecord)
+}
 
-  found_end_module := false
-  for token in tokens {
-    if token.token_type == .EndModule {
-      found_end_module = true
-    }
-  }
-  testing.expect(t, found_end_module)
+@(test)
+test_record :: proc(t: ^testing.T) {
+  tokens := tokenize_all("{ .name \"Player One\" .score 100 }")
+  defer delete_tokens(tokens)
+
+  testing.expect_value(t, len(tokens), 6)
+  testing.expect_value(t, tokens[0].token_type, Token_Type.StartRecord)
+  testing.expect_value(t, tokens[1].token_type, Token_Type.DotSymbol)
+  testing.expect_value(t, tokens[2].token_type, Token_Type.String)
+  testing.expect_value(t, tokens[3].token_type, Token_Type.DotSymbol)
+  testing.expect_value(t, tokens[4].token_type, Token_Type.Word)
+  testing.expect_value(t, tokens[5].token_type, Token_Type.EndRecord)
 }
 
 @(test)
