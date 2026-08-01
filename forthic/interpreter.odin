@@ -6,6 +6,8 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:os"
 
+Word_Options :: distinct Record
+
 Interpreter :: struct {
   // Parameter stack
   stack:  Stack,

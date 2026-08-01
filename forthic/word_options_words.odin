@@ -11,6 +11,6 @@ native_set_options :: proc(interp: ^Interpreter) -> Error {
     return Type_Mismatch{ note = "options should be a record", location = Code_Location{} }
   }
 
-  interp.pending_word_options = word_options_from_record(record)
+  interp.pending_word_options = Word_Options(record)
   return nil
 }

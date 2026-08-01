@@ -58,3 +58,32 @@ forthic_value_equal :: proc(a, b: Forthic_Value) -> bool {
   }
   return false
 }
+
+record_get_bool :: proc(record: Record, name: string, default: bool) -> bool {
+  return record_get(record, name, default)
+}
+
+record_get_int :: proc(record: Record, name: string, default: i64) -> i64 {
+  return record_get(record, name, default)
+}
+
+record_get_float :: proc(record: Record, name: string, default: f64) -> f64 {
+  return record_get(record, name, default)
+}
+
+record_get_string :: proc(record: Record, name: string, default: string) -> string {
+  return record_get(record, name, default)
+}
+
+record_get :: proc(record: Record, name: string, default: $T) -> T {
+  value, is_present := record[Dot_Symbol(name)]
+  if !is_present {
+    return default
+  }
+
+  typed_value, is_T := value.(T)
+  if !is_T {
+    return default
+  }
+  return typed_value
+}
