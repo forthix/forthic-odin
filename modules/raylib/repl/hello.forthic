@@ -1,0 +1,7 @@
+: INITIALIZE-APP    { .width 800 .height 600 .title "Forthic Demo" } raylib.INIT-WINDOW ;
+: REGISTER-HANDLERS   ;
+: DRAW-FRAME
+  raylib.BEGIN-DRAWING
+  { .r 245 .g 245 .b 245 .a 255 } raylib.CLEAR-BACKGROUND
+  raylib.END-DRAWING
+;
