@@ -1,10 +1,12 @@
-package main
+package raylib_repl
 
 import "core:bufio"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import "../forthic"
+
+import "../../../forthic"
+import raylib_forthic "../"
 
 main :: proc() {
   reader: bufio.Reader
@@ -16,14 +18,17 @@ main :: proc() {
   forthic.interpreter_init(&interp)
   defer forthic.interpreter_destroy(&interp)
 
+  raylib_module := raylib_forthic.raylib_module_create()
+  forthic.interpreter_register_and_import_module(&interp, raylib_module, "raylib")
+
   // Run file if provided
   if len(os.args) > 1 {
     err := forthic.interpreter_run_file(&interp, os.args[1])
     if err != nil {
       fmt.println(err)
     }
-
   }
+
   for {
     fmt.print("forthic> ")
 

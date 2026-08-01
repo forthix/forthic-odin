@@ -4,6 +4,7 @@ import "core:strings"
 import "core:strconv"
 import "core:mem"
 import "core:mem/virtual"
+import "core:os"
 
 Interpreter :: struct {
   // Parameter stack
@@ -11,6 +12,8 @@ Interpreter :: struct {
 
   // Tokenizer stack (needed for when we do things like MAP or RUN
   tokenizer_stack: [dynamic]Tokenizer,
+
+  registered_modules: map[string]^Module,
 
   // Modules can be opened up from other modules at runtime. This captures that nesting
   module_stack: [dynamic]^Module,
@@ -69,6 +72,27 @@ interpreter_destroy :: proc(interp: ^Interpreter) {
   virtual.arena_destroy(&interp.word_arena)
 }
 
+interpreter_register_module :: proc(interp: ^Interpreter, module: ^Module) {
+  interp.registered_modules[module.name] = module
+}
+
+interpreter_register_and_import_module :: proc(interp: ^Interpreter, module: ^Module, prefix: string) {
+  interpreter_register_module(interp, module)
+  app_module := interp.module_stack[0]
+  module_import_words_prefixed(app_module, module, prefix)
+}
+
+
+interpreter_run_file :: proc(interp: ^Interpreter, filename: string) -> Error {
+  contents, read_err := os.read_entire_file(filename, context.allocator)
+  if read_err != nil {
+    return Read_File_Error{path = filename, err = read_err}
+  }
+  defer delete(contents)
+
+  positioned_forthic := Positioned_Forthic{string(contents), nil}
+  return interpreter_run(interp, positioned_forthic)
+}
 
 interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_Forthic) -> Error {
   context.allocator = interpreter_arena_allocator(interp)
