@@ -12,3 +12,4 @@
     { .text "Hello, Forthic!" .posX 300 .posY 320 .fontSize 24 .color BLACK } raylib.DRAW-TEXT
     raylib.END-DRAWING
 ;
+

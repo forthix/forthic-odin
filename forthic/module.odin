@@ -37,6 +37,7 @@ module_add_native_word :: proc(
       description = description,
       examples = examples,
     },
+    requires_ui_thread = module.requires_ui_thread,
   })
 }
 
