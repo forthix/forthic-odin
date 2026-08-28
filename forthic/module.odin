@@ -21,17 +21,17 @@ module_add_word :: proc(module: ^Module, word: Compiled_Word) {
   append(&module.words, word)
 }
 
-module_add_native_word :: proc(
+module_add_builtin_word :: proc(
   module: ^Module, 
   name: string,
-  handler: Native_Word_Proc,
+  handler: Builtin_Word_Proc,
   stack_effect: string,
   description: string,
   examples: []string,
 ) {
   module_add_word(module, Compiled_Word{
     name = strings.clone(name),
-    action = Native_Word_Proc(handler),
+    action = Builtin_Word_Proc(handler),
     doc = Word_Doc{
       stack_effect = stack_effect,
       description = description,

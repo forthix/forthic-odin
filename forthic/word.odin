@@ -2,11 +2,11 @@ package forthic
 
 import "core:sync"
 
-Native_Word_Proc :: proc(interp: ^Interpreter) -> Error
+Builtin_Word_Proc :: proc(interp: ^Interpreter) -> Error
 
 // This is what happens when a Forthic word is executed
 Word_Action :: union {
-  Native_Word_Proc,
+  Builtin_Word_Proc,
   Forthic_Value,
   [dynamic]Compiled_Word,
 }
@@ -27,7 +27,7 @@ Compiled_Word :: struct {
 
 compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word, thread_kind: Thread_Kind = .Repl) -> Error {
   switch action in word.action {
-  case Native_Word_Proc:
+  case Builtin_Word_Proc:
     err : Error
     if word.requires_ui_thread && thread_kind != .Ui {
       sync.mutex_lock(&interp.ui_mutex)

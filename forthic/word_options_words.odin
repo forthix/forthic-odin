@@ -1,6 +1,6 @@
 package forthic
 
-native_set_options :: proc(interp: ^Interpreter) -> Error {
+builtin_set_options :: proc(interp: ^Interpreter) -> Error {
   value, err := stack_pop(&interp.stack)
   if err != nil {
     return err

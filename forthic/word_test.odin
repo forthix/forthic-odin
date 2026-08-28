@@ -3,7 +3,7 @@ package forthic
 import "core:testing"
 import "core:thread"
 
-native_push_42 :: proc(interp: ^Interpreter) -> Error {
+builtin_push_42 :: proc(interp: ^Interpreter) -> Error {
   stack_push(&interp.stack, Forthic_Value(i64(42)))
   return nil
 }
@@ -25,7 +25,7 @@ test_compiled_word_execute_hands_off_ui_thread_word :: proc(t: ^testing.T) {
   interpreter_init(&interp)
   defer interpreter_destroy(&interp)
 
-  word := Compiled_Word{name = "UI-WORD", action = Native_Word_Proc(native_push_42), requires_ui_thread = true}
+  word := Compiled_Word{name = "UI-WORD", action = Builtin_Word_Proc(builtin_push_42), requires_ui_thread = true}
   job := Ui_Test_Job{interp = &interp, word = word}
 
   th := thread.create(ui_test_job_thread_proc)
@@ -52,7 +52,7 @@ test_compiled_word_execute_no_handoff_when_already_on_ui_thread :: proc(t: ^test
   interpreter_init(&interp)
   defer interpreter_destroy(&interp)
 
-  word := Compiled_Word{name = "UI-WORD", action = Native_Word_Proc(native_push_42), requires_ui_thread = true}
+  word := Compiled_Word{name = "UI-WORD", action = Builtin_Word_Proc(builtin_push_42), requires_ui_thread = true}
 
   err := compiled_word_execute(&interp, word, .Ui)
   testing.expect(t, err == nil)

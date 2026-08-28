@@ -3,30 +3,30 @@ package forthic
 core_module_create :: proc() -> ^Module {
   core_module := module_create("core")
 
-  module_add_native_word(core_module, "~>", native_set_options, "( options -- )", "Sets pending word options", {})
+  module_add_builtin_word(core_module, "~>", builtin_set_options, "( options -- )", "Sets pending word options", {})
 
-  module_add_native_word(core_module, "DROP", native_drop, "( a -- )", "Drops top of stack", {})
-  module_add_native_word(core_module, "DUP", native_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
-  module_add_native_word(core_module, "SWAP", native_swap, "( a b -- b a )", "Swap the top two stack items", {"1 2 SWAP  # => 2 1"})
+  module_add_builtin_word(core_module, "DROP", builtin_drop, "( a -- )", "Drops top of stack", {})
+  module_add_builtin_word(core_module, "DUP", builtin_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
+  module_add_builtin_word(core_module, "SWAP", builtin_swap, "( a b -- b a )", "Swap the top two stack items", {"1 2 SWAP  # => 2 1"})
 
-  module_add_native_word(core_module, "+", native_add, "( a:number b:number -- sum:number )", "Add two numbers", {})
-  module_add_native_word(core_module, "-", native_subtract, "( a:number b:number -- difference:number )", "Subtracts two numbers", {})
-  module_add_native_word(core_module, "*", native_multiply, "( a:number b:number -- product:number )", "Multiplies two numbers", {})
-  module_add_native_word(core_module, "/", native_divide, "( a:number b:number -- quotient:number )", "Divides two numbers", {})
+  module_add_builtin_word(core_module, "+", builtin_add, "( a:number b:number -- sum:number )", "Add two numbers", {})
+  module_add_builtin_word(core_module, "-", builtin_subtract, "( a:number b:number -- difference:number )", "Subtracts two numbers", {})
+  module_add_builtin_word(core_module, "*", builtin_multiply, "( a:number b:number -- product:number )", "Multiplies two numbers", {})
+  module_add_builtin_word(core_module, "/", builtin_divide, "( a:number b:number -- quotient:number )", "Divides two numbers", {})
 
-  module_add_native_word(core_module, "MODULE", native_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
-  module_add_native_word(core_module, "END-MODULE", native_end_module, "( -- )", "Pop the current module from the module stack", {})
-  module_add_native_word(core_module, "APP-MODULE", native_app_module, "( -- )", "Make the application module the current module", {})
+  module_add_builtin_word(core_module, "MODULE", builtin_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
+  module_add_builtin_word(core_module, "END-MODULE", builtin_end_module, "( -- )", "Pop the current module from the module stack", {})
+  module_add_builtin_word(core_module, "APP-MODULE", builtin_app_module, "( -- )", "Make the application module the current module", {})
 
   return core_module
 }
 
-native_drop :: proc(interp: ^Interpreter) -> Error {
+builtin_drop :: proc(interp: ^Interpreter) -> Error {
   _, err := stack_pop(&interp.stack)
   return err
 }
 
-native_dup :: proc(interp: ^Interpreter) -> Error {
+builtin_dup :: proc(interp: ^Interpreter) -> Error {
   top, ok := stack_peek(&interp.stack)
   if !ok {
     return Stack_Underflow{}
@@ -35,7 +35,7 @@ native_dup :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_swap :: proc(interp: ^Interpreter) -> Error {
+builtin_swap :: proc(interp: ^Interpreter) -> Error {
   b_val, b_err := stack_pop(&interp.stack)
   if b_err != nil {
     return b_err
@@ -51,29 +51,29 @@ native_swap :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_add :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "+ requires two numbers",
+builtin_add :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "+ requires two numbers",
     proc(a, b: i64) -> i64 { return a + b },
     proc(a, b: f64) -> f64 { return a + b },
   )
 }
 
 
-native_subtract :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "- requires two numbers",
+builtin_subtract :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "- requires two numbers",
     proc(a, b: i64) -> i64 { return a - b },
     proc(a, b: f64) -> f64 { return a - b },
   )
 }
 
-native_multiply :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "* requires two numbers",
+builtin_multiply :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "* requires two numbers",
     proc(a, b: i64) -> i64 { return a * b },
     proc(a, b: f64) -> f64 { return a * b },
   )
 }
 
-native_divide :: proc(interp: ^Interpreter) -> Error {
+builtin_divide :: proc(interp: ^Interpreter) -> Error {
   r_val, r_error := stack_pop(&interp.stack)
   if r_error != nil {
     return r_error
@@ -102,7 +102,7 @@ native_divide :: proc(interp: ^Interpreter) -> Error {
 // ----------------------------------------------------------------------------
 
 
-native_binary_numeric_op :: proc(
+builtin_binary_numeric_op :: proc(
   interp: ^Interpreter,
   note: string,
   int_op: proc(a, b: i64) -> i64,

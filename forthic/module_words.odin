@@ -2,7 +2,7 @@
 
 package forthic
 
-native_module :: proc(interp: ^Interpreter) -> Error {
+builtin_module :: proc(interp: ^Interpreter) -> Error {
   // Pop module name
   value, err1 := stack_pop(&interp.stack)
   if err1 != nil {
@@ -19,7 +19,7 @@ native_module :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_end_module :: proc(interp: ^Interpreter) -> Error {
+builtin_end_module :: proc(interp: ^Interpreter) -> Error {
   if len(interp.module_stack) <= 1 {
     return Extra_End_Module{ location = Code_Location{} }
   }
@@ -27,7 +27,7 @@ native_end_module :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_app_module :: proc(interp: ^Interpreter) -> Error {
+builtin_app_module :: proc(interp: ^Interpreter) -> Error {
   app_module := interp.module_stack[0]
   append(&interp.module_stack, app_module)
   return nil

@@ -183,13 +183,13 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token, thread_kind
   case .String:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))}, thread_kind)
   case .StartArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Native_Word_Proc(native_start_array)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Builtin_Word_Proc(builtin_start_array)}, thread_kind)
   case .EndArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Native_Word_Proc(native_end_array)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Builtin_Word_Proc(builtin_end_array)}, thread_kind)
   case .StartRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Native_Word_Proc(native_start_record)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Builtin_Word_Proc(builtin_start_record)}, thread_kind)
   case .EndRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Native_Word_Proc(native_end_record)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Builtin_Word_Proc(builtin_end_record)}, thread_kind)
   case:
      return nil
   }

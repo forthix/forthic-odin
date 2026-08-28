@@ -9,13 +9,13 @@ Collection_Start :: struct {
   kind: Collection_Kind,
 }
 
-native_start_array :: proc(interp: ^Interpreter) -> Error {
+builtin_start_array :: proc(interp: ^Interpreter) -> Error {
   append(&interp.collection_start_positions, Collection_Start{position=stack_len(&interp.stack), kind = .Array})
   return nil
 }
 
 
-native_end_array :: proc(interp: ^Interpreter) -> Error {
+builtin_end_array :: proc(interp: ^Interpreter) -> Error {
   start := pop(&interp.collection_start_positions)
   if start.kind != .Array {
     return Mismatched_Collection{
@@ -42,7 +42,7 @@ native_end_array :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_end_record :: proc(interp: ^Interpreter) -> Error {
+builtin_end_record :: proc(interp: ^Interpreter) -> Error {
   start := pop(&interp.collection_start_positions)
   if start.kind != .Record {
     return Mismatched_Collection{
@@ -96,7 +96,7 @@ native_end_record :: proc(interp: ^Interpreter) -> Error {
 }
 
 
-native_start_record :: proc(interp: ^Interpreter) -> Error {
+builtin_start_record :: proc(interp: ^Interpreter) -> Error {
   append(&interp.collection_start_positions, Collection_Start{position=stack_len(&interp.stack), kind = .Record})
   return nil
 }
