@@ -5,11 +5,8 @@ import "core:strconv"
 import "core:mem"
 import "core:mem/virtual"
 import "core:os"
-import "core:sync"
 
 Word_Options :: distinct Record
-
-Thread_Kind :: enum { Repl, Ui }
 
 Interpreter :: struct {
   // Parameter stack
@@ -22,13 +19,6 @@ Interpreter :: struct {
 
   // Modules can be opened up from other modules at runtime. This captures that nesting
   module_stack: [dynamic]^Module,
-
-  // UI thread support
-  ui_handoff_count: i32,
-  ui_pending_word: Maybe(Compiled_Word),
-  ui_error: Error,
-  ui_mutex: sync.Mutex,
-  ui_job_done: sync.Cond,
 
   // Array/record support
   collection_start_positions: [dynamic]Collection_Start,
@@ -66,7 +56,7 @@ interpreter_init :: proc(interp: ^Interpreter) {
   context.allocator = interpreter_arena_allocator(interp)
 
   app_module := module_create("")
-  module_import_words(app_module, core_module_create()) 
+  module_import_words(app_module, core_module_create())
 
   append(&interp.module_stack, app_module)
 
@@ -106,7 +96,7 @@ interpreter_run_file :: proc(interp: ^Interpreter, filename: string) -> Error {
   return interpreter_run(interp, positioned_forthic)
 }
 
-interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_Forthic, thread_kind: Thread_Kind = .Repl) -> Error {
+interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_Forthic) -> Error {
   context.allocator = interpreter_arena_allocator(interp)
 
   tokenizer :  Tokenizer
@@ -128,7 +118,7 @@ interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_For
       break
     }
 
-    handle_err := interpreter_handle_token(interp, token, thread_kind)
+    handle_err := interpreter_handle_token(interp, token)
     delete(token.text)
     if handle_err != nil {
       return handle_err
@@ -139,7 +129,7 @@ interpreter_run :: proc(interp: ^Interpreter, positioned_forthic: Positioned_For
   return nil
 }
 
-interpreter_handle_token :: proc(interp: ^Interpreter, token: Token, thread_kind: Thread_Kind = .Repl) -> Error {
+interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   // Clear out pending doc lines if not a comment or start definition
   if token.token_type != .Comment && token.token_type != .StartDef && len(interp.pending_doc_lines) > 0 {
     clear(&interp.pending_doc_lines)
@@ -148,7 +138,7 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token, thread_kind
   // Handle each token
   #partial switch token.token_type {
   case .Word:
-    return interpreter_handle_word_token(interp, token, thread_kind)
+    return interpreter_handle_word_token(interp, token)
   case .Comment:
     return interpreter_handle_comment_token(interp, token)
   case .StartDef:
@@ -179,33 +169,33 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token, thread_kind
     return nil
   case .DotSymbol:
     new_value : Dot_Symbol = Dot_Symbol(strings.clone(token.text))
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(new_value)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<dot-symbol>"), action = Forthic_Value(new_value)})
   case .String:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))})
   case .StartArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Builtin_Word_Proc(builtin_start_array)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Builtin_Word_Proc(builtin_start_array)})
   case .EndArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Builtin_Word_Proc(builtin_end_array)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Builtin_Word_Proc(builtin_end_array)})
   case .StartRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Builtin_Word_Proc(builtin_start_record)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Builtin_Word_Proc(builtin_start_record)})
   case .EndRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Builtin_Word_Proc(builtin_end_record)}, thread_kind)
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Builtin_Word_Proc(builtin_end_record)})
   case:
      return nil
   }
 }
 
-interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token, thread_kind: Thread_Kind = .Repl) -> Error {
+interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   word, found := interpreter_find_word(interp, token.text)
   if found {
-    return interpreter_handle_word(interp, word, thread_kind)
+    return interpreter_handle_word(interp, word)
   }
 
   // Check literals
   for literal_handler in interp.literal_handlers {
     value, ok := literal_handler(token.text)
     if ok {
-      return interpreter_handle_word(interp, Compiled_Word{name = strings.clone(token.text), action = value}, thread_kind)
+      return interpreter_handle_word(interp, Compiled_Word{name = strings.clone(token.text), action = value})
     }
   }
 
@@ -213,12 +203,12 @@ interpreter_handle_word_token :: proc(interp: ^Interpreter, token: Token, thread
 }
 
 
-interpreter_handle_word :: proc(interp: ^Interpreter, word: Compiled_Word, thread_kind: Thread_Kind = .Repl) -> Error {
+interpreter_handle_word :: proc(interp: ^Interpreter, word: Compiled_Word) -> Error {
   if interp.is_compiling {
     append(&interp.cur_definition_body, word)
     return nil
   }
-  return compiled_word_execute(interp, word, thread_kind)
+  return compiled_word_execute(interp, word)
 }
 
 interpreter_handle_comment_token :: proc(interp: ^Interpreter, token: Token) -> Error {
@@ -265,17 +255,5 @@ interpreter_parse_pending_doc :: proc(interp: ^Interpreter) -> Word_Doc {
     stack_effect = stack_effect,
     description = strings.join(description_lines[:], " "),
     examples = examples[:],
-  }
-}
-
-
-interpreter_drain_ui_job :: proc(interp: ^Interpreter) {
-  if sync.mutex_try_lock(&interp.ui_mutex) {
-    if word, has_word := interp.ui_pending_word.?; has_word {
-      interp.ui_error = compiled_word_execute(interp, word, .Ui)
-      interp.ui_pending_word = nil
-      sync.cond_signal(&interp.ui_job_done)
-    }
-    sync.mutex_unlock(&interp.ui_mutex)
   }
 }

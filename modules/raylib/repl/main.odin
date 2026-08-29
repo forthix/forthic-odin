@@ -12,34 +12,43 @@ import "../../../forthic"
 import raylib_forthic "../"
 
 main :: proc() {
-  interp: forthic.Interpreter
-  forthic.interpreter_init(&interp)
-  defer forthic.interpreter_destroy(&interp)
+  ui_interp: forthic.Interpreter
+  forthic.interpreter_init(&ui_interp)
+  defer forthic.interpreter_destroy(&ui_interp)
 
   raylib_module := raylib_forthic.raylib_module_create()
-  forthic.interpreter_register_and_import_module(&interp, raylib_module, "raylib")
+  forthic.interpreter_register_and_import_module(&ui_interp, raylib_module, "raylib")
+
+  queue: forthic.Mirror_Job_Queue
+
+  repl_interp: forthic.Interpreter
+  forthic.interpreter_init(&repl_interp)
+  defer forthic.interpreter_destroy(&repl_interp)
+
+  mirror_module := forthic.module_mirror(raylib_module, &ui_interp, &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, mirror_module, "raylib")
 
   if len(os.args) > 1 {
-    err := forthic.interpreter_run_file(&interp, os.args[1])
+    err := forthic.interpreter_run_file(&ui_interp, os.args[1])
     if err != nil {
       fmt.println(err)
       os.exit(1)
     }
   }
 
-  init_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP ON-REGISTER-HANDLERS", nil}, .Ui)
+  init_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP ON-REGISTER-HANDLERS", nil})
   if init_err != nil {
     fmt.println(init_err)
     os.exit(1)
   }
 
   th := thread.create(repl_thread_proc)
-  th.data = &interp
+  th.data = &repl_interp
   thread.start(th)
 
   for !raylib.WindowShouldClose() {
-    forthic.interpreter_drain_ui_job(&interp)
-    frame_err := forthic.interpreter_run(&interp, forthic.Positioned_Forthic{"ON-DRAW-FRAME", nil}, .Ui)
+    forthic.mirror_job_queue_drain(&queue, &ui_interp)
+    frame_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-DRAW-FRAME", nil})
     if frame_err != nil {
       fmt.println(frame_err)
       os.exit(1)
@@ -58,6 +67,8 @@ repl_thread_proc :: proc(t: ^thread.Thread) {
   defer bufio.reader_destroy(&reader)
 
   for {
+    fmt.print("forthic> ")
+
     line, err := bufio.reader_read_string(&reader, '\n')
     defer delete(line)
     if err != nil {
@@ -71,7 +82,6 @@ repl_thread_proc :: proc(t: ^thread.Thread) {
     if run_err != nil {
       fmt.println(run_err)
     }
+    fmt.println(interp.stack.items[:])
   }
 }
-
-
