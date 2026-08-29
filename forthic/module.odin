@@ -7,6 +7,7 @@ Module :: struct {
   words: [dynamic]Compiled_Word,
 
   submodules: map[string]^Module,
+  variables: map[string]Forthic_Value,
 }
 
 module_create :: proc(name: string) -> ^Module {

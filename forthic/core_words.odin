@@ -4,6 +4,7 @@ core_module_create :: proc() -> ^Module {
   core_module := module_create("core")
 
   module_add_builtin_word(core_module, "~>", builtin_set_options, "( options -- )", "Sets pending word options", {})
+  module_add_builtin_word(core_module, "PRINT", builtin_print, "( a -- )", "Prints the top of stack to stdout, for debugging", {`"hi" PRINT`})
 
   module_add_builtin_word(core_module, "DROP", builtin_drop, "( a -- )", "Drops top of stack", {})
   module_add_builtin_word(core_module, "DUP", builtin_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
@@ -17,6 +18,29 @@ core_module_create :: proc() -> ^Module {
   module_add_builtin_word(core_module, "MODULE", builtin_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
   module_add_builtin_word(core_module, "END-MODULE", builtin_end_module, "( -- )", "Pop the current module from the module stack", {})
   module_add_builtin_word(core_module, "APP-MODULE", builtin_app_module, "( -- )", "Make the application module the current module", {})
+
+  module_add_builtin_word(core_module, "JQ@", builtin_jq_at, "( container path -- value )", "Drills into a record/array by a path of dot-symbol/string fields and int indices; a bare (non-array) path is one segment. nil on any miss.", {`{ .E 1 .W -1 } .E JQ@  # => 1`})
+
+  module_add_builtin_word(core_module, "VARIABLES", builtin_variables, "( names:array -- )", "Declares variables (by name) in the current module", {`[ .x .y ] VARIABLES`})
+  module_add_builtin_word(core_module, "!", builtin_set_variable, "( value name -- )", "Sets a variable's value (name is a dot-symbol or string), declaring it first if needed", {`5 .x !`})
+  module_add_builtin_word(core_module, "@", builtin_get_variable, "( name -- value )", "Gets a variable's value (name is a dot-symbol or string); errors if undeclared", {`.x @`})
+  module_add_builtin_word(core_module, "!@", builtin_set_and_get_variable, "( value name -- value )", "Sets a variable and returns the value", {`5 .x !@`})
+
+  module_add_builtin_word(core_module, "RUN", builtin_run, "( forthic:string -- ? )", "Runs a Forthic string in the current context", {`"1 2 +" RUN`})
+  module_add_builtin_word(core_module, "TIMES-RUN", builtin_times_run, "( num_times:int forthic:string -- ? )", "Runs a Forthic string num_times; no per-iteration value is passed automatically", {`3 "1 +" TIMES-RUN`})
+  module_add_builtin_word(core_module, "IF", builtin_if, "( bool then_value else_value -- chosen )", "Pushes then_value if bool is true, else else_value", {`TRUE 1 2 IF  # => 1`})
+  module_add_builtin_word(core_module, "IF-RUN", builtin_if_run, "( bool then_forthic else_forthic -- ? )", "Runs then_forthic if bool is true, else else_forthic", {`TRUE "1" "2" IF-RUN  # => 1`})
+  module_add_builtin_word(core_module, "WHEN", builtin_when, "( bool forthic -- ? )", "Runs forthic if bool is true, otherwise does nothing", {`TRUE "1 2 +" WHEN`})
+
+  module_add_builtin_word(core_module, "==", builtin_equal, "( a b -- equal:bool )", "Tests equality", {})
+  module_add_builtin_word(core_module, "!=", builtin_not_equal, "( a b -- not_equal:bool )", "Tests inequality", {})
+  module_add_builtin_word(core_module, "<", builtin_less_than, "( a:number b:number -- less:bool )", "Less than", {})
+  module_add_builtin_word(core_module, "<=", builtin_less_equal, "( a:number b:number -- less_equal:bool )", "Less than or equal", {})
+  module_add_builtin_word(core_module, ">", builtin_greater_than, "( a:number b:number -- greater:bool )", "Greater than", {})
+  module_add_builtin_word(core_module, ">=", builtin_greater_equal, "( a:number b:number -- greater_equal:bool )", "Greater than or equal", {})
+  module_add_builtin_word(core_module, "NOT", builtin_not, "( bool -- result:bool )", "Logical NOT", {})
+  module_add_builtin_word(core_module, "AND", builtin_and, "( a:bool b:bool -- result:bool )", "Logical AND", {})
+  module_add_builtin_word(core_module, "OR", builtin_or, "( a:bool b:bool -- result:bool )", "Logical OR", {})
 
   return core_module
 }

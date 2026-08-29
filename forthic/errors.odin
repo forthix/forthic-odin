@@ -9,6 +9,7 @@ Error :: union {
   Type_Mismatch,
   Mismatched_Collection,
   Unknown_Word,
+  Unknown_Variable,
   Division_By_Zero,
   Missing_Semicolon,
   Extra_Semicolon,
@@ -40,6 +41,11 @@ Mismatched_Collection :: struct {
 
 Unknown_Word :: struct {
   word: string,
+  location: Code_Location,
+}
+
+Unknown_Variable :: struct {
+  name: string,
   location: Code_Location,
 }
 

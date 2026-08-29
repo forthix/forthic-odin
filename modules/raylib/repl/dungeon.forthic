@@ -1,0 +1,119 @@
+[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth ] VARIABLES
+
+: MAX-SCAN-DEPTH 7 ;
+
+: DUNGEON
+  [ "#######"
+    "#.....#"
+    "#.###.#"
+    "#.#...#"
+    "#.#.###"
+    "#.....#"
+    "#######" ]
+;
+
+: ON-INITIALIZE-APP
+  { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
+  60 raylib.SET-TARGET-FPS
+  1 .player-x !
+  1 .player-y !
+  "E" .player-facing !
+;
+
+: ON-REGISTER-HANDLERS ;
+
+: FACING-DX { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@ ;
+: FACING-DY { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@ ;
+
+: LEFT-DX  FACING-DY ;
+: LEFT-DY  0 FACING-DX - ;
+
+: CAMERA-X .player-x @ 0.5 + ;
+: CAMERA-Z .player-y @ 0.5 + ;
+: TARGET-X CAMERA-X FACING-DX + ;
+: TARGET-Z CAMERA-Z FACING-DY + ;
+
+# Record values here are strings, not dot-symbols: a dot-symbol immediately
+# followed by another dot-symbol is parsed as a bare boolean flag, not a
+# key/value pair (see collection_words.odin), so back-to-back dot-symbols
+# would silently fail to build the mapping we want.
+: NEXT-FACING-CW  { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@ ;
+: NEXT-FACING-CCW { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@ ;
+
+# Debug helper: prints "x y facing" state to stdout whenever it's called.
+: PRINT-STATE
+  .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
+;
+
+: TURN-RIGHT NEXT-FACING-CW .player-facing ! PRINT-STATE ;
+: TURN-LEFT NEXT-FACING-CCW .player-facing ! PRINT-STATE ;
+
+: TRY-MOVE-FORWARD
+  DUNGEON
+  .player-x @ FACING-DX +
+  .player-y @ FACING-DY +
+  dungeon.IS-WALL? NOT
+  ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
+  WHEN
+;
+
+: TRY-MOVE-BACKWARD
+  DUNGEON
+  .player-x @ FACING-DX -
+  .player-y @ FACING-DY -
+  dungeon.IS-WALL? NOT
+  ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
+  WHEN
+;
+
+: DRAW-WALL-AT
+  .wall-y ! .wall-x !
+  DUNGEON .wall-x @ .wall-y @ dungeon.IS-WALL?
+  "{ .x .wall-x @ 0.5 + .y 0.5 .z .wall-y @ 0.5 + .width 1 .height 1 .length 1 .color { .r 120 .g 120 .b 130 .a 255 } } raylib.DRAW-CUBE"
+  WHEN
+;
+
+# depth: how many cells ahead (along facing). lat: how many cells to the
+# left (negative = right). Draws a wall cube at that offset, if there is one.
+: DRAW-WALL-AHEAD
+  .lat ! .depth !
+  .player-x @ .depth @ FACING-DX * + .lat @ LEFT-DX * +
+  .player-y @ .depth @ FACING-DY * + .lat @ LEFT-DY * +
+  DRAW-WALL-AT
+;
+
+# One step of the forward scan: advances .scan-depth and draws straight
+# ahead plus immediate left/right flanking, at that depth.
+: SCAN-DEPTH-STEP
+  .scan-depth @ 1 + .scan-depth !
+  .scan-depth @ 0  DRAW-WALL-AHEAD
+  .scan-depth @ 1  DRAW-WALL-AHEAD
+  .scan-depth @ -1 DRAW-WALL-AHEAD
+;
+
+: DRAW-VISIBLE-WALLS
+  0 .scan-depth !
+  MAX-SCAN-DEPTH "SCAN-DEPTH-STEP" TIMES-RUN
+;
+
+: ON-DRAW-FRAME
+  "W" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
+  "UP" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
+  "S" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
+  "DOWN" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
+  "A" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
+  "LEFT" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
+  "D" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
+  "RIGHT" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
+
+  raylib.BEGIN-DRAWING
+  { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
+
+  { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
+  { .slices 20 .spacing 1 } raylib.DRAW-GRID
+
+  DRAW-VISIBLE-WALLS
+
+  raylib.END-MODE-3D
+  raylib.END-DRAWING
+;
