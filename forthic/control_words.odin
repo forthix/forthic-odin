@@ -1,14 +1,10 @@
 package forthic
 
+// ( forthic:string -- ? )
 builtin_run :: proc(interp: ^Interpreter) -> Error {
-  forthic, err := stack_pop(&interp.stack)
+  source, err := pop_string(interp, "RUN")
   if err != nil {
     return err
-  }
-
-  source, is_string := forthic.(string)
-  if !is_string {
-    return Type_Mismatch{note = "RUN requires a Forthic string"}
   }
   if source == "" {
     return nil
@@ -16,23 +12,15 @@ builtin_run :: proc(interp: ^Interpreter) -> Error {
   return interpreter_run(interp, Positioned_Forthic{source, nil})
 }
 
+// ( num_times:int forthic:string -- ? )
 builtin_times_run :: proc(interp: ^Interpreter) -> Error {
-  forthic, forthic_err := stack_pop(&interp.stack)
-  if forthic_err != nil {
-    return forthic_err
+  source, source_err := pop_string(interp, "TIMES-RUN")
+  if source_err != nil {
+    return source_err
   }
-  num_times, num_err := stack_pop(&interp.stack)
-  if num_err != nil {
-    return num_err
-  }
-
-  n, is_int := num_times.(i64)
-  if !is_int {
-    return Type_Mismatch{note = "TIMES-RUN requires an int count"}
-  }
-  source, is_string := forthic.(string)
-  if !is_string {
-    return Type_Mismatch{note = "TIMES-RUN requires a Forthic string"}
+  n, n_err := pop_int(interp, "TIMES-RUN")
+  if n_err != nil {
+    return n_err
   }
   if source == "" {
     return nil
@@ -47,6 +35,7 @@ builtin_times_run :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( bool then_value else_value -- chosen )
 builtin_if :: proc(interp: ^Interpreter) -> Error {
   else_value, else_err := stack_pop(&interp.stack)
   if else_err != nil {
@@ -56,14 +45,9 @@ builtin_if :: proc(interp: ^Interpreter) -> Error {
   if then_err != nil {
     return then_err
   }
-  bool_value, bool_err := stack_pop(&interp.stack)
+  is_true, bool_err := pop_bool(interp, "IF")
   if bool_err != nil {
     return bool_err
-  }
-
-  is_true, is_bool := bool_value.(bool)
-  if !is_bool {
-    return Type_Mismatch{note = "IF requires a boolean"}
   }
 
   if is_true {
@@ -74,6 +58,9 @@ builtin_if :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( bool then_forthic else_forthic -- ? )
+// Only the chosen branch is required to be a string -- the other one is
+// never inspected, matching IF's "pure value selection" laziness.
 builtin_if_run :: proc(interp: ^Interpreter) -> Error {
   else_forthic, else_err := stack_pop(&interp.stack)
   if else_err != nil {
@@ -83,14 +70,9 @@ builtin_if_run :: proc(interp: ^Interpreter) -> Error {
   if then_err != nil {
     return then_err
   }
-  bool_value, bool_err := stack_pop(&interp.stack)
+  is_true, bool_err := pop_bool(interp, "IF-RUN")
   if bool_err != nil {
     return bool_err
-  }
-
-  is_true, is_bool := bool_value.(bool)
-  if !is_bool {
-    return Type_Mismatch{note = "IF-RUN requires a boolean"}
   }
 
   branch := else_forthic
@@ -108,19 +90,17 @@ builtin_if_run :: proc(interp: ^Interpreter) -> Error {
   return interpreter_run(interp, Positioned_Forthic{source, nil})
 }
 
+// ( bool forthic -- ? )
+// forthic's type is only checked when bool is true -- WHEN is a no-op
+// (forthic never inspected) when bool is false.
 builtin_when :: proc(interp: ^Interpreter) -> Error {
   forthic, forthic_err := stack_pop(&interp.stack)
   if forthic_err != nil {
     return forthic_err
   }
-  bool_value, bool_err := stack_pop(&interp.stack)
+  is_true, bool_err := pop_bool(interp, "WHEN")
   if bool_err != nil {
     return bool_err
-  }
-
-  is_true, is_bool := bool_value.(bool)
-  if !is_bool {
-    return Type_Mismatch{note = "WHEN requires a boolean"}
   }
   if !is_true {
     return nil

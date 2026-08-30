@@ -3,6 +3,7 @@ package forthic
 import "core:fmt"
 import "core:strings"
 
+// ( item -- string )
 builtin_to_str :: proc(interp: ^Interpreter) -> Error {
   value, err := stack_pop(&interp.stack)
   if err != nil {
@@ -35,15 +36,11 @@ forthic_value_to_string :: proc(value: Forthic_Value) -> string {
   return ""
 }
 
+// ( strings:array -- result:string )
 builtin_concat :: proc(interp: ^Interpreter) -> Error {
-  value, err := stack_pop(&interp.stack)
+  arr, err := pop_array(interp, "CONCAT")
   if err != nil {
     return err
-  }
-
-  arr, is_array := value.([dynamic]Forthic_Value)
-  if !is_array {
-    return Type_Mismatch{note = "CONCAT requires an array of strings"}
   }
 
   builder: strings.Builder

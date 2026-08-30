@@ -13,15 +13,11 @@ variable_name_from_value :: proc(value: Forthic_Value) -> (string, bool) {
   }
 }
 
+// ( names:array -- )
 builtin_variables :: proc(interp: ^Interpreter) -> Error {
-  value, err := stack_pop(&interp.stack)
+  names, err := pop_array(interp, "VARIABLES")
   if err != nil {
     return err
-  }
-
-  names, is_array := value.([dynamic]Forthic_Value)
-  if !is_array {
-    return Type_Mismatch{note = "VARIABLES requires an array of variable names"}
   }
 
   module := interp.module_stack[len(interp.module_stack) - 1]
@@ -37,8 +33,9 @@ builtin_variables :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( value name -- )
 builtin_set_variable :: proc(interp: ^Interpreter) -> Error {
-  name, name_err := stack_pop(&interp.stack)
+  name_str, name_err := pop_name(interp, "!")
   if name_err != nil {
     return name_err
   }
@@ -47,25 +44,16 @@ builtin_set_variable :: proc(interp: ^Interpreter) -> Error {
     return value_err
   }
 
-  name_str, ok := variable_name_from_value(name)
-  if !ok {
-    return Type_Mismatch{note = "! requires a variable name"}
-  }
-
   module := interp.module_stack[len(interp.module_stack) - 1]
   module.variables[name_str] = value
   return nil
 }
 
+// ( name -- value )
 builtin_get_variable :: proc(interp: ^Interpreter) -> Error {
-  name, name_err := stack_pop(&interp.stack)
-  if name_err != nil {
-    return name_err
-  }
-
-  name_str, ok := variable_name_from_value(name)
-  if !ok {
-    return Type_Mismatch{note = "@ requires a variable name"}
+  name_str, err := pop_name(interp, "@")
+  if err != nil {
+    return err
   }
 
   module := interp.module_stack[len(interp.module_stack) - 1]
@@ -78,19 +66,15 @@ builtin_get_variable :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( value name -- value )
 builtin_set_and_get_variable :: proc(interp: ^Interpreter) -> Error {
-  name, name_err := stack_pop(&interp.stack)
+  name_str, name_err := pop_name(interp, "!@")
   if name_err != nil {
     return name_err
   }
   value, value_err := stack_pop(&interp.stack)
   if value_err != nil {
     return value_err
-  }
-
-  name_str, ok := variable_name_from_value(name)
-  if !ok {
-    return Type_Mismatch{note = "!@ requires a variable name"}
   }
 
   module := interp.module_stack[len(interp.module_stack) - 1]

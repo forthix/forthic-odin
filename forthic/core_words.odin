@@ -51,11 +51,13 @@ core_module_create :: proc() -> ^Module {
   return core_module
 }
 
+// ( a -- )
 builtin_drop :: proc(interp: ^Interpreter) -> Error {
   _, err := stack_pop(&interp.stack)
   return err
 }
 
+// ( a -- a a )
 builtin_dup :: proc(interp: ^Interpreter) -> Error {
   top, ok := stack_peek(&interp.stack)
   if !ok {
@@ -65,6 +67,7 @@ builtin_dup :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( a b -- b a )
 builtin_swap :: proc(interp: ^Interpreter) -> Error {
   b_val, b_err := stack_pop(&interp.stack)
   if b_err != nil {
@@ -81,6 +84,7 @@ builtin_swap :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( a:number b:number -- sum:number )
 builtin_add :: proc(interp: ^Interpreter) -> Error {
   return builtin_binary_numeric_op(interp, "+ requires two numbers",
     proc(a, b: i64) -> i64 { return a + b },
@@ -89,6 +93,7 @@ builtin_add :: proc(interp: ^Interpreter) -> Error {
 }
 
 
+// ( a:number b:number -- difference:number )
 builtin_subtract :: proc(interp: ^Interpreter) -> Error {
   return builtin_binary_numeric_op(interp, "- requires two numbers",
     proc(a, b: i64) -> i64 { return a - b },
@@ -96,6 +101,7 @@ builtin_subtract :: proc(interp: ^Interpreter) -> Error {
   )
 }
 
+// ( a:number b:number -- product:number )
 builtin_multiply :: proc(interp: ^Interpreter) -> Error {
   return builtin_binary_numeric_op(interp, "* requires two numbers",
     proc(a, b: i64) -> i64 { return a * b },
@@ -103,6 +109,7 @@ builtin_multiply :: proc(interp: ^Interpreter) -> Error {
   )
 }
 
+// ( a:number b:number -- quotient:number )
 builtin_divide :: proc(interp: ^Interpreter) -> Error {
   r_val, r_error := stack_pop(&interp.stack)
   if r_error != nil {

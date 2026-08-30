@@ -14,25 +14,19 @@ dungeon_module_create :: proc() -> ^forthic.Module {
   return dungeon_module
 }
 
+// ( dungeon:array x:int y:int -- bool )
 builtin_is_wall :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  y_val, y_err := forthic.stack_pop(&interp.stack)
+  y, y_err := forthic.pop_int(interp, "IS-WALL?")
   if y_err != nil {
     return y_err
   }
-  x_val, x_err := forthic.stack_pop(&interp.stack)
+  x, x_err := forthic.pop_int(interp, "IS-WALL?")
   if x_err != nil {
     return x_err
   }
-  dungeon_val, dungeon_err := forthic.stack_pop(&interp.stack)
+  dungeon, dungeon_err := forthic.pop_array(interp, "IS-WALL?")
   if dungeon_err != nil {
     return dungeon_err
-  }
-
-  y, y_is_int := y_val.(i64)
-  x, x_is_int := x_val.(i64)
-  dungeon, dungeon_is_array := dungeon_val.([dynamic]forthic.Forthic_Value)
-  if !y_is_int || !x_is_int || !dungeon_is_array {
-    return forthic.Type_Mismatch{note = "IS-WALL? requires (dungeon:array x:int y:int)"}
   }
 
   is_wall := true

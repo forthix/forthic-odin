@@ -1,5 +1,6 @@
 package forthic
 
+// ( container -- length:int )
 builtin_length :: proc(interp: ^Interpreter) -> Error {
   value, err := stack_pop(&interp.stack)
   if err != nil {
@@ -20,22 +21,17 @@ builtin_length :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( container:array n:int -- item )
 // 0-indexed. Out-of-range is nil, matching the permissive style of
 // JQ@/log.LINE rather than erroring.
 builtin_nth :: proc(interp: ^Interpreter) -> Error {
-  n_value, n_err := stack_pop(&interp.stack)
+  n, n_err := pop_int(interp, "NTH")
   if n_err != nil {
     return n_err
   }
-  container_value, container_err := stack_pop(&interp.stack)
-  if container_err != nil {
-    return container_err
-  }
-
-  n, is_int := n_value.(i64)
-  arr, is_array := container_value.([dynamic]Forthic_Value)
-  if !is_int || !is_array {
-    return Type_Mismatch{note = "NTH requires (container:array n:int)"}
+  arr, arr_err := pop_array(interp, "NTH")
+  if arr_err != nil {
+    return arr_err
   }
 
   item: Forthic_Value

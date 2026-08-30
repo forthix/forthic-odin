@@ -1,5 +1,6 @@
 package forthic
 
+// ( container path -- value )
 // Drills into a container by a path of record fields (Dot_Symbol or string)
 // and/or array indices (int). A bare (non-array) path is treated as a single
 // segment, so a single dot-symbol works directly: `.player-facing @ JQ@`.

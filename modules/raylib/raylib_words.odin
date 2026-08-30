@@ -98,20 +98,17 @@ raylib_module_create :: proc() -> ^forthic.Module {
   return raylib_module
 }
 
+// ( -- )
 builtin_close_window :: proc(_: ^forthic.Interpreter) -> forthic.Error {
   raylib.CloseWindow()
   return nil
 }
 
+// ( record -- )
 builtin_init_window :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  value, err := forthic.stack_pop(&interp.stack)
+  record, err := forthic.stack_pop_record(&interp.stack, "INIT-WINDOW requires a record with width, height, and title")
   if err != nil {
     return err
-  }
-
-  record, is_record := value.(forthic.Record)
-  if !is_record {
-    return forthic.Type_Mismatch{note = "INIT-WINDOW requires a record with width, height, and title"}
   }
 
   width := forthic.record_get_int(record, "width", 800)
@@ -124,23 +121,27 @@ builtin_init_window :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( -- bool )
 builtin_window_should_close :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   should_close := raylib.WindowShouldClose()
   forthic.stack_push(&interp.stack, forthic.Forthic_Value(should_close))
   return nil
 }
 
+// ( -- )
 builtin_begin_drawing :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   raylib.BeginDrawing()
   return nil
 }
 
+// ( -- )
 builtin_end_drawing :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   raylib.EndDrawing()
   return nil
 }
 
 
+// ( record -- )
 builtin_clear_background :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "CLEAR-BACKGROUND requires a record with r, g, b, a" )
   if err != nil {
@@ -152,6 +153,7 @@ builtin_clear_background :: proc(interp: ^forthic.Interpreter) -> forthic.Error 
 }
 
 
+// ( record -- )
 builtin_draw_rectangle :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "DRAW-RECTANGLE requires a record with x, y, width, height, color" )
   if err != nil {
@@ -169,20 +171,15 @@ builtin_draw_rectangle :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( path:string size:int -- )
 builtin_load_font :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  size_value, size_err := forthic.stack_pop(&interp.stack)
+  size, size_err := forthic.pop_int(interp, "LOAD-FONT")
   if size_err != nil {
     return size_err
   }
-  path_value, path_err := forthic.stack_pop(&interp.stack)
+  path, path_err := forthic.pop_string(interp, "LOAD-FONT")
   if path_err != nil {
     return path_err
-  }
-
-  path, is_string := path_value.(string)
-  size, is_int := size_value.(i64)
-  if !is_string || !is_int {
-    return forthic.Type_Mismatch{note = "LOAD-FONT requires (path:string size:int)"}
   }
 
   if has_custom_font {
@@ -197,6 +194,7 @@ builtin_load_font :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( record -- )
 builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "DRAW-TEXT requires a record with text, posX, posY, fontSize, color")
   if err != nil {
@@ -218,6 +216,7 @@ builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( record -- )
 builtin_begin_mode_3d :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "BEGIN-MODE-3D requires a record with position, target, up, fovy")
   if err != nil {
@@ -239,11 +238,13 @@ builtin_begin_mode_3d :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( -- )
 builtin_end_mode_3d :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   raylib.EndMode3D()
   return nil
 }
 
+// ( record -- )
 builtin_draw_cube :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "DRAW-CUBE requires a record with x, y, z, width, height, length, color")
   if err != nil {
@@ -262,6 +263,7 @@ builtin_draw_cube :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( record -- )
 builtin_draw_grid :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "DRAW-GRID requires a record with slices, spacing")
   if err != nil {
@@ -275,15 +277,11 @@ builtin_draw_grid :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( key:string -- bool )
 builtin_is_key_down :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  value, err := forthic.stack_pop(&interp.stack)
+  key_name, err := forthic.pop_string(interp, "IS-KEY-DOWN")
   if err != nil {
     return err
-  }
-
-  key_name, is_string := value.(string)
-  if !is_string {
-    return forthic.Type_Mismatch{note = "IS-KEY-DOWN requires a key name string"}
   }
 
   key, found := key_from_name(key_name)
@@ -295,15 +293,11 @@ builtin_is_key_down :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( key:string -- bool )
 builtin_is_key_pressed :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  value, err := forthic.stack_pop(&interp.stack)
+  key_name, err := forthic.pop_string(interp, "IS-KEY-PRESSED")
   if err != nil {
     return err
-  }
-
-  key_name, is_string := value.(string)
-  if !is_string {
-    return forthic.Type_Mismatch{note = "IS-KEY-PRESSED requires a key name string"}
   }
 
   key, found := key_from_name(key_name)
@@ -315,15 +309,11 @@ builtin_is_key_pressed :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( fps:int -- )
 builtin_set_target_fps :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  value, err := forthic.stack_pop(&interp.stack)
+  fps, err := forthic.pop_int(interp, "SET-TARGET-FPS")
   if err != nil {
     return err
-  }
-
-  fps, is_int := value.(i64)
-  if !is_int {
-    return forthic.Type_Mismatch{note = "SET-TARGET-FPS requires an int"}
   }
 
   raylib.SetTargetFPS(i32(fps))

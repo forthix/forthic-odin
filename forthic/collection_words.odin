@@ -9,12 +9,14 @@ Collection_Start :: struct {
   kind: Collection_Kind,
 }
 
+// ( -- ) -- just records the current stack depth as the array's start
 builtin_start_array :: proc(interp: ^Interpreter) -> Error {
   append(&interp.collection_start_positions, Collection_Start{position=stack_len(&interp.stack), kind = .Array})
   return nil
 }
 
 
+// ( ...items -- array ) -- everything pushed since the matching [
 builtin_end_array :: proc(interp: ^Interpreter) -> Error {
   start := pop(&interp.collection_start_positions)
   if start.kind != .Array {
@@ -42,6 +44,7 @@ builtin_end_array :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// ( ...key-value-pairs -- record ) -- everything pushed since the matching {
 builtin_end_record :: proc(interp: ^Interpreter) -> Error {
   start := pop(&interp.collection_start_positions)
   if start.kind != .Record {
@@ -96,6 +99,7 @@ builtin_end_record :: proc(interp: ^Interpreter) -> Error {
 }
 
 
+// ( -- ) -- just records the current stack depth as the record's start
 builtin_start_record :: proc(interp: ^Interpreter) -> Error {
   append(&interp.collection_start_positions, Collection_Start{position=stack_len(&interp.stack), kind = .Record})
   return nil

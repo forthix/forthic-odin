@@ -36,6 +36,7 @@ log_module_create :: proc() -> ^forthic.Module {
   return log_module
 }
 
+// ( entry -- )
 builtin_log_append :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   value, err := forthic.stack_pop(&interp.stack)
   if err != nil {
@@ -46,25 +47,23 @@ builtin_log_append :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+// ( -- n:int )
 builtin_log_count :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   forthic.stack_push(&interp.stack, forthic.Forthic_Value(i64(len(messages))))
   return nil
 }
 
+// ( -- )
 builtin_log_clear :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   clear(&messages)
   return nil
 }
 
+// ( index:int -- entry )
 builtin_log_line :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
-  value, err := forthic.stack_pop(&interp.stack)
+  index, err := forthic.pop_int(interp, "log.LINE")
   if err != nil {
     return err
-  }
-
-  index, is_int := value.(i64)
-  if !is_int {
-    return forthic.Type_Mismatch{note = "log.LINE requires an int index"}
   }
 
   entry: forthic.Forthic_Value
