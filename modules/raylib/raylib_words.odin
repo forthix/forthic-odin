@@ -160,10 +160,10 @@ builtin_draw_rectangle :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
     return err
   }
 
-  x := forthic.record_get_int(record, "x", 0)
-  y := forthic.record_get_int(record, "y", 0)
-  width := forthic.record_get_int(record, "width", 0)
-  height := forthic.record_get_int(record, "height", 0)
+  x := record_get_f32(record, "x", 0)
+  y := record_get_f32(record, "y", 0)
+  width := record_get_f32(record, "width", 0)
+  height := record_get_f32(record, "height", 0)
   color_record := forthic.record_get_record(record, "color", forthic.Record{})
 
   color := record_to_color(color_record)
@@ -202,9 +202,9 @@ builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   }
 
   text := forthic.record_get_string(record, "text", "")
-  posX := forthic.record_get_int(record, "posX", 0)
-  posY := forthic.record_get_int(record, "posY", 0)
-  fontSize := forthic.record_get_int(record, "fontSize", 0)
+  posX := record_get_f32(record, "posX", 0)
+  posY := record_get_f32(record, "posY", 0)
+  fontSize := record_get_f32(record, "fontSize", 0)
   color_record := forthic.record_get_record(record, "color", forthic.Record{})
 
   text_cstring := strings.clone_to_cstring(text)
@@ -212,7 +212,7 @@ builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
 
   color := record_to_color(color_record)
   font := has_custom_font ? current_font : raylib.GetFontDefault()
-  raylib.DrawTextEx(font, text_cstring, raylib.Vector2{f32(posX), f32(posY)}, f32(fontSize), f32(fontSize) * 0.1, color)
+  raylib.DrawTextEx(font, text_cstring, raylib.Vector2{posX, posY}, fontSize, fontSize * 0.1, color)
   return nil
 }
 

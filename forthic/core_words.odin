@@ -7,6 +7,7 @@ core_module_create :: proc() -> ^Module {
   module_add_builtin_word(core_module, "PRINT", builtin_print, "( a -- )", "Prints the top of stack to stdout, for debugging", {`"hi" PRINT`})
   module_add_builtin_word(core_module, "LENGTH", builtin_length, "( container -- length:int )", "Length of an array or record", {`[ 1 2 3 ] LENGTH  # => 3`})
   module_add_builtin_word(core_module, "NTH", builtin_nth, "( container:array n:int -- item )", "Gets the nth (0-indexed) element of an array; nil if out of range", {`[ 10 20 30 ] 1 NTH  # => 20`})
+  module_add_builtin_word(core_module, "BUCKET", builtin_bucket, "( value:number breakpoints:array default -- key )", "Classifies value by an ascending array of { .below .key } breakpoints; default if none match", {`0.25 [ { .below 0 .key "low" } { .below 0.5 .key "medium" } ] "high" BUCKET  # => "medium"`})
   module_add_builtin_word(core_module, "NOW-MS", builtin_now_ms, "( -- ms:int )", "Current Unix time in milliseconds", {"NOW-MS"})
 
   module_add_builtin_word(core_module, "DROP", builtin_drop, "( a -- )", "Drops top of stack", {})

@@ -1,9 +1,27 @@
-[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth .log-row .turn-count .log-message-text .log-entry .log-index
-  .move-blocked .history-head .last-action-ms .history-action .history-turn .history-outcome .now-ms .elapsed-ms
-  .replaying? .restore-event-id .replay-rows .replay-index ] VARIABLES
+[ .player-x .player-y            # Player position in the dungeon grid
+  .player-facing                 # Current facing: "N" "E" "S" or "W"
 
-: MAX-SCAN-DEPTH 7 ;
-: LOG-VISIBLE-COUNT 5 ;
+  .scan-depth                    # DRAW-VISIBLE-WALLS' scan depth; shared because each TIMES-RUN step is its own call
+  .turn-count                    # Number of player actions taken so far (also the event "turn")
+
+  .log-row                       # Which on-screen log row is being drawn; shared, same reason as .scan-depth
+  .log-index                     # Handed from DRAW-LOG-ROW-STEP to DRAW-LOG-ENTRY; shared across that call
+
+  .history-head                  # Current event id at the tip of history (nil before any action)
+  .last-action-ms                # Timestamp of the previous recorded action, for elapsed_ms
+  .history-action .history-turn  # Handed from HISTORY-RECORD to HISTORY-RECORD-NOW; shared across that call
+  .history-outcome               #
+  .replaying?                    # True while HISTORY-RESTORE-TO is replaying (suppresses re-recording)
+  .replay-rows .replay-index     # Replay loop state for REPLAY-STEP; shared, same reason as .scan-depth
+
+  .party                         # Array of party member records: { .name .hp .max-hp }
+  .party-index                   # Which party member is being drawn; shared, same reason as .scan-depth
+  .hp-ratio                      # Handed from DRAW-PARTY-MEMBER-STEP to HP-BAR-COLOR; shared across that call
+  ] VARIABLES
+
+: MAX-SCAN-DEPTH   7 ;
+: LOG-VISIBLE-COUNT   5 ;
+: FONT-SIZE   16;
 
 : DUNGEON
   [ "#######"
@@ -15,11 +33,19 @@
     "#######" ]
 ;
 
+: INITIAL-PARTY
+  [ { .name "Thorin" .hp 24 .max-hp 24 }
+    { .name "Elara"  .hp 16 .max-hp 18 }
+    { .name "Grimm"  .hp 5  .max-hp 20 }
+    { .name "Vex"    .hp 12 .max-hp 12 } ]
+;
+
 : RESET-GAME-STATE
   1 .player-x !
   1 .player-y !
   "E" .player-facing !
   0 .turn-count !
+  INITIAL-PARTY .party !
 ;
 
 : HISTORY-SCHEMA
@@ -36,7 +62,7 @@
 : ON-INITIALIZE-APP
   { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
   60 raylib.SET-TARGET-FPS
-  "/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT
+  "/System/Library/Fonts/SFNSMono.ttf" FONT-SIZE raylib.LOAD-FONT
   "dungeon_history.db" sqlite.OPEN
   HISTORY-SCHEMA
   LOAD-HISTORY-HEAD
@@ -45,32 +71,32 @@
   RESET-GAME-STATE
 ;
 
-: ON-REGISTER-HANDLERS ;
+: ON-REGISTER-HANDLERS   ;
 
-: FACING-DX { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@ ;
-: FACING-DY { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@ ;
+: FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@ ;
+: FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@ ;
 
-: LEFT-DX  FACING-DY ;
-: LEFT-DY  0 FACING-DX - ;
+: LEFT-DX   FACING-DY ;
+: LEFT-DY   0 FACING-DX - ;
 
-: CAMERA-X .player-x @ 0.5 + ;
-: CAMERA-Z .player-y @ 0.5 + ;
-: TARGET-X CAMERA-X FACING-DX + ;
-: TARGET-Z CAMERA-Z FACING-DY + ;
+: CAMERA-X   .player-x @ 0.5 + ;
+: CAMERA-Z   .player-y @ 0.5 + ;
+: TARGET-X   CAMERA-X FACING-DX + ;
+: TARGET-Z   CAMERA-Z FACING-DY + ;
 
 # Record values here are strings, not dot-symbols: a dot-symbol immediately
 # followed by another dot-symbol is parsed as a bare boolean flag, not a
 # key/value pair (see collection_words.odin), so back-to-back dot-symbols
 # would silently fail to build the mapping we want.
-: NEXT-FACING-CW  { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@ ;
-: NEXT-FACING-CCW { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@ ;
+: NEXT-FACING-CW   { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@ ;
+: NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@ ;
 
 # Debug helper: prints "x y facing" state to stdout whenever it's called.
 : PRINT-STATE
   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
 ;
 
-: NEXT-TURN .turn-count @ 1 + .turn-count ! ;
+: NEXT-TURN   .turn-count @ 1 + .turn-count ! ;
 
 # Stores the turn number and message text as separate fields, so the log
 # can render them in separate columns instead of one formatted string.
@@ -133,10 +159,10 @@
   FALSE .replaying? !
 ;
 
-: TURN-RIGHT NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" HISTORY-RECORD ;
-: TURN-LEFT NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" HISTORY-RECORD ;
+: TURN-RIGHT   NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" HISTORY-RECORD ;
+: TURN-LEFT   NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" HISTORY-RECORD ;
 
-: CANT-GO-THAT-WAY "\"You can't go that way.\" LOG-MESSAGE" ;
+: CANT-GO-THAT-WAY   "\"You can't go that way.\" LOG-MESSAGE" ;
 
 : TRY-MOVE-FORWARD
   NEXT-TURN
@@ -199,7 +225,7 @@
   IF
 ;
 
-: LOG-ROW-Y .log-row @ 1 - 20 * 480 + ;
+: LOG-ROW-Y   .log-row @ 1 - 20 * 480 + ;
 
 : DRAW-LOG-ENTRY
   .log-index @ log.LINE .log-entry !
@@ -232,6 +258,62 @@
   LOG-VISIBLE-COUNT "DRAW-LOG-ROW-STEP" TIMES-RUN
 ;
 
+# Party status bar: a strip across the top (the message log owns the
+# bottom), name + HP text + a color-coded HP bar per member. Condition is
+# derived from the hp/max-hp ratio rather than stored, so it can't drift
+# out of sync with the actual numbers.
+: PARTY-COUNT   .party @ LENGTH ;
+: PARTY-COLUMN-WIDTH   800 PARTY-COUNT / ;
+: PARTY-COLUMN-MARGIN   10 ;
+: PARTY-MEMBER-X   .party-index @ 1 - PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN + ;
+: PARTY-BAR-WIDTH   PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * - ;
+
+# Key values here are strings, not dot-symbols: a dot-symbol immediately
+# followed by another dot-symbol is parsed as a bare boolean flag, not a
+# key/value pair (see collection_words.odin), so { .key "low" } needs a
+# string even though .low would read more naturally.
+: HP-BREAKPOINTS
+  [ { .below 0   .key "low" }
+    { .below 0.5 .key "medium" } ]
+;
+
+: HP-COLORS
+  { .low    { .r 200 .g 40  .b 40  .a 255 }
+    .medium { .r 220 .g 200 .b 40  .a 255 }
+    .high   { .r 60  .g 200 .b 60  .a 255 } }
+;
+
+: HP-BAR-COLOR
+  HP-COLORS
+  .hp-ratio @ HP-BREAKPOINTS "high" BUCKET
+  JQ@
+;
+
+: DRAW-PARTY-MEMBER-STEP
+  .party-index @ 1 + .party-index !
+  .party @ .party-index @ 1 - NTH .party-member !
+  .party-member @ .hp JQ@ .party-member @ .max-hp JQ@ / .hp-ratio !
+
+  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .height 12
+    .color { .r 60 .g 60 .b 60 .a 255 } }
+  raylib.DRAW-RECTANGLE
+
+  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .hp-ratio @ * .height 12
+    .color HP-BAR-COLOR }
+  raylib.DRAW-RECTANGLE
+
+  { .text [ .party-member @ .name JQ@ " " .party-member @ .hp JQ@ >STR "/" .party-member @ .max-hp JQ@ >STR ] CONCAT
+    .posX PARTY-MEMBER-X .posY 8 .fontSize FONT-SIZE
+    .color { .r 255 .g 255 .b 255 .a 255 } }
+  raylib.DRAW-TEXT
+;
+
+: DRAW-PARTY-BAR
+  { .x 0 .y 0 .width 800 .height 64 .color { .r 20 .g 20 .b 30 .a 220 } } raylib.DRAW-RECTANGLE
+  0 .party-index !
+  PARTY-COUNT "DRAW-PARTY-MEMBER-STEP" TIMES-RUN
+;
+
 : ON-DRAW-FRAME
   "W" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
   "UP" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
@@ -252,6 +334,7 @@
 
   raylib.END-MODE-3D
 
+  DRAW-PARTY-BAR
   DRAW-MESSAGE-LOG
 
   raylib.END-DRAWING

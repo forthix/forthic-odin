@@ -14,6 +14,9 @@ repl:
 raylib-repl:
 	odin run modules/raylib/repl -- modules/raylib/repl/hello.forthic
 
+raylib-dungeon:
+	odin run modules/raylib/repl -- modules/raylib/repl/dungeon.forthic
+
 raylib-build: $(RAYLIB_BIN)
 
 $(RAYLIB_BIN): $(RAYLIB_SRCS)
