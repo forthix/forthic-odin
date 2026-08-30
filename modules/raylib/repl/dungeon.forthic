@@ -47,18 +47,16 @@
   history.INITIALIZE
 ;
 
-: ON-REGISTER-HANDLERS   ;
-
 : FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@;
 : FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@;
 
-: LEFT-DX   FACING-DY;
-: LEFT-DY   0 FACING-DX -;
+: LEFT-DX     FACING-DY;
+: LEFT-DY     0 FACING-DX -;
 
-: CAMERA-X   .player-x @ 0.5 +;
-: CAMERA-Z   .player-y @ 0.5 +;
-: TARGET-X   CAMERA-X FACING-DX +;
-: TARGET-Z   CAMERA-Z FACING-DY +;
+: CAMERA-X    .player-x @ 0.5 +;
+: CAMERA-Z    .player-y @ 0.5 +;
+: TARGET-X    CAMERA-X FACING-DX +;
+: TARGET-Z    CAMERA-Z FACING-DY +;
 
 # Record values here are strings, not dot-symbols: a dot-symbol immediately
 # followed by another dot-symbol is parsed as a bare boolean flag, not a

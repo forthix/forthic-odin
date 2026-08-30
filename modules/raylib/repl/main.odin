@@ -67,7 +67,7 @@ main :: proc() {
     }
   }
 
-  init_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP ON-REGISTER-HANDLERS", nil})
+  init_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP", nil})
   if init_err != nil {
     fmt.println(init_err)
     os.exit(1)
