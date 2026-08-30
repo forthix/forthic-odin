@@ -56,12 +56,16 @@ test_module_mirror :: proc(t: ^testing.T) {
   interpreter_init(&target_interp)
   defer interpreter_destroy(&target_interp)
 
+  // Registered the same way main.odin registers a real module -- prefixed
+  // into target's app module, not pushed onto module_stack bare. This is
+  // what module_mirror's own words must actually be found under when a
+  // job later drains against target's module_stack.
   source := module_create("demo")
   module_add_builtin_word(source, "PUSH-42", mirror_test_push_42, "( -- n )", "Pushes 42", {})
-  append(&target_interp.module_stack, source)
+  interpreter_register_and_import_module(&target_interp, source, "demo")
 
   queue: Mirror_Job_Queue
-  mirror := module_mirror(source, &target_interp, &queue)
+  mirror := module_mirror(source, &target_interp, "demo", &queue)
   testing.expect_value(t, mirror.name, "demo")
 
   word, found := module_find_word(mirror, "PUSH-42")

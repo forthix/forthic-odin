@@ -8,27 +8,22 @@
   .log-row                       # Which on-screen log row is being drawn; shared, same reason as .scan-depth
   .log-index                     # Handed from DRAW-LOG-ROW-STEP to DRAW-LOG-ENTRY; shared across that call
 
-  .history-head                  # Current event id at the tip of history (nil before any action)
-  .last-action-ms                # Timestamp of the previous recorded action, for elapsed_ms
-  .history-action .history-turn  # Handed from HISTORY-RECORD to HISTORY-RECORD-NOW; shared across that call
-  .history-outcome               #
-  .replaying?                    # True while HISTORY-RESTORE-TO is replaying (suppresses re-recording)
-  .replay-rows .replay-index     # Replay loop state for REPLAY-STEP; shared, same reason as .scan-depth
-
   .party                         # Array of party member records: { .name .hp .max-hp }
   .party-index                   # Which party member is being drawn; shared, same reason as .scan-depth
   .hp-ratio                      # Handed from DRAW-PARTY-MEMBER-STEP to HP-BAR-COLOR; shared across that call
   ] VARIABLES
 
-: MAX-SCAN-DEPTH   7 ;
-: LOG-VISIBLE-COUNT   5 ;
-: FONT-SIZE   16;
+
+: MAX-SCAN-DEPTH      7;
+: LOG-VISIBLE-COUNT   5;
+: FONT-SIZE           16;
 
 : INITIAL-PARTY
   [ { .name "Thorin" .hp 24 .max-hp 24 }
     { .name "Elara"  .hp 16 .max-hp 18 }
     { .name "Grimm"  .hp 5  .max-hp 20 }
-    { .name "Vex"    .hp 12 .max-hp 12 } ]
+    { .name "Vex"    .hp 12 .max-hp 12 }
+  ]
 ;
 
 : RESET-GAME-STATE
@@ -40,56 +35,44 @@
   INITIAL-PARTY .party !
 ;
 
-: HISTORY-SCHEMA
-  "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER REFERENCES events(id), turn INTEGER NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL, elapsed_ms INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))" sqlite.EXEC
-  "CREATE TABLE IF NOT EXISTS session (id INTEGER PRIMARY KEY CHECK (id = 1), head_event_id INTEGER REFERENCES events(id))" sqlite.EXEC
-  "INSERT OR IGNORE INTO session (id, head_event_id) VALUES (1, NULL)" sqlite.EXEC
-;
-
-: LOAD-HISTORY-HEAD
-  "SELECT head_event_id FROM session WHERE id = 1" [ ] sqlite.QUERY-WITH
-  0 NTH .head_event_id JQ@ .history-head !
-;
+# history module's hook: how history.RESTORE-TO gets back to a clean state before replaying.
+: ON-HISTORY-RESET   RESET-GAME-STATE log.CLEAR;
 
 : ON-INITIALIZE-APP
   { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
   60 raylib.SET-TARGET-FPS
   "/System/Library/Fonts/SFNSMono.ttf" FONT-SIZE raylib.LOAD-FONT
-  "dungeon_history.db" sqlite.OPEN
-  HISTORY-SCHEMA
-  LOAD-HISTORY-HEAD
   "modules/raylib/repl/locations/goblin-warren/location.forthic" LOAD-OBJECT .location !
-  NOW-MS .last-action-ms !
-  FALSE .replaying? !
-  RESET-GAME-STATE
+  "dungeon_history.db" sqlite.OPEN
+  history.INITIALIZE
 ;
 
 : ON-REGISTER-HANDLERS   ;
 
-: FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@ ;
-: FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@ ;
+: FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@;
+: FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@;
 
-: LEFT-DX   FACING-DY ;
-: LEFT-DY   0 FACING-DX - ;
+: LEFT-DX   FACING-DY;
+: LEFT-DY   0 FACING-DX -;
 
-: CAMERA-X   .player-x @ 0.5 + ;
-: CAMERA-Z   .player-y @ 0.5 + ;
-: TARGET-X   CAMERA-X FACING-DX + ;
-: TARGET-Z   CAMERA-Z FACING-DY + ;
+: CAMERA-X   .player-x @ 0.5 +;
+: CAMERA-Z   .player-y @ 0.5 +;
+: TARGET-X   CAMERA-X FACING-DX +;
+: TARGET-Z   CAMERA-Z FACING-DY +;
 
 # Record values here are strings, not dot-symbols: a dot-symbol immediately
 # followed by another dot-symbol is parsed as a bare boolean flag, not a
 # key/value pair (see collection_words.odin), so back-to-back dot-symbols
 # would silently fail to build the mapping we want.
-: NEXT-FACING-CW   { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@ ;
-: NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@ ;
+: NEXT-FACING-CW   { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@;
+: NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@;
 
 # Debug helper: prints "x y facing" state to stdout whenever it's called.
 : PRINT-STATE
   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
 ;
 
-: NEXT-TURN   .turn-count @ 1 + .turn-count ! ;
+: NEXT-TURN   .turn-count @ 1 + .turn-count !;
 
 # Stores the turn number and message text as separate fields, so the log
 # can render them in separate columns instead of one formatted string.
@@ -99,63 +82,10 @@
   log.APPEND
 ;
 
-# Event-sourced history: every real player action (success or failure) is
-# recorded as a row in `events`, chained via parent_id off .history-head.
-# .replaying? suppresses recording while HISTORY-RESTORE-TO reconstructs
-# state by re-running a stored action sequence, so replay never creates
-# duplicate/branching writes on its own.
-: HISTORY-RECORD-NOW
-  NOW-MS .now-ms !
-  .now-ms @ .last-action-ms @ - .elapsed-ms !
-  .now-ms @ .last-action-ms !
-  "INSERT INTO events (parent_id, turn, action, outcome, elapsed_ms) VALUES (?, ?, ?, ?, ?)"
-  [ .history-head @ .history-turn @ .history-action @ .history-outcome @ .elapsed-ms @ ]
-  sqlite.EXEC-WITH
-  sqlite.LAST-INSERT-ID .history-head !
-  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
-;
+: TURN-RIGHT   NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" history.RECORD;
+: TURN-LEFT   NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" history.RECORD;
 
-: HISTORY-RECORD
-  .history-outcome ! .history-turn ! .history-action !
-  .replaying? @ NOT
-  "HISTORY-RECORD-NOW"
-  WHEN
-;
-
-: REPLAY-STEP
-  .replay-rows @ .replay-index @ NTH .action JQ@ RUN
-  .replay-index @ 1 + .replay-index !
-;
-
-# Restores to an earlier event and rebuilds state by replaying the action
-# sequence from root to it (via one recursive-CTE query for the whole
-# chain). Recording a new action afterwards forks a new branch from here,
-# since .history-head now points at event-id instead of the old tip.
-: HISTORY-RESTORE-TO
-  .restore-event-id !
-  TRUE .replaying? !
-
-  "WITH RECURSIVE chain(id, parent_id, action) AS ( SELECT id, parent_id, action FROM events WHERE id = ? UNION ALL SELECT e.id, e.parent_id, e.action FROM events e JOIN chain c ON e.id = c.parent_id ) SELECT action FROM chain ORDER BY id ASC"
-  [ .restore-event-id @ ]
-  sqlite.QUERY-WITH
-  .replay-rows !
-
-  RESET-GAME-STATE
-  log.CLEAR
-
-  0 .replay-index !
-  .replay-rows @ LENGTH "REPLAY-STEP" TIMES-RUN
-
-  .restore-event-id @ .history-head !
-  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
-
-  FALSE .replaying? !
-;
-
-: TURN-RIGHT   NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" HISTORY-RECORD ;
-: TURN-LEFT   NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" HISTORY-RECORD ;
-
-: CANT-GO-THAT-WAY   "\"You can't go that way.\" LOG-MESSAGE" ;
+: CANT-GO-THAT-WAY   "\"You can't go that way.\" LOG-MESSAGE";
 
 : TRY-MOVE-FORWARD
   NEXT-TURN
@@ -165,7 +95,7 @@
   ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
   CANT-GO-THAT-WAY
   IF-RUN
-  "TRY-MOVE-FORWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
+  "TRY-MOVE-FORWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
 ;
 
 : TRY-MOVE-BACKWARD
@@ -176,7 +106,7 @@
   ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
   CANT-GO-THAT-WAY
   IF-RUN
-  "TRY-MOVE-BACKWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
+  "TRY-MOVE-BACKWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
 ;
 
 : DRAW-WALL-AT
@@ -218,7 +148,7 @@
   IF
 ;
 
-: LOG-ROW-Y   .log-row @ 1 - 20 * 480 + ;
+: LOG-ROW-Y   .log-row @ 1 - 20 * 480 +;
 
 : DRAW-LOG-ENTRY
   .log-index @ log.LINE .log-entry !
@@ -255,11 +185,11 @@
 # bottom), name + HP text + a color-coded HP bar per member. Condition is
 # derived from the hp/max-hp ratio rather than stored, so it can't drift
 # out of sync with the actual numbers.
-: PARTY-COUNT   .party @ LENGTH ;
-: PARTY-COLUMN-WIDTH   800 PARTY-COUNT / ;
-: PARTY-COLUMN-MARGIN   10 ;
-: PARTY-MEMBER-X   .party-index @ 1 - PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN + ;
-: PARTY-BAR-WIDTH   PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * - ;
+: PARTY-COUNT   .party @ LENGTH;
+: PARTY-COLUMN-WIDTH   800 PARTY-COUNT /;
+: PARTY-COLUMN-MARGIN   10;
+: PARTY-MEMBER-X   .party-index @ 1 - PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN +;
+: PARTY-BAR-WIDTH   PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * -;
 
 # Key values here are strings, not dot-symbols: a dot-symbol immediately
 # followed by another dot-symbol is parsed as a bare boolean flag, not a

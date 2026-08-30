@@ -12,6 +12,19 @@ builtin_run :: proc(interp: ^Interpreter) -> Error {
   return interpreter_run(interp, Positioned_Forthic{source, nil})
 }
 
+// Runs filename on an isolated scratch stack -- shared by LOAD-OBJECT and
+// module_create_from_forthic_file (module.odin) so a buggy file can't
+// corrupt the caller's stack either way.
+run_file_isolated :: proc(interp: ^Interpreter, filename: string) -> (Stack, Error) {
+  caller_stack := interp.stack
+  interp.stack = Stack{items = make([dynamic]Forthic_Value, 0, interp.default_allocator)}
+
+  run_err := interpreter_run_file(interp, filename)
+  loaded_stack := interp.stack
+  interp.stack = caller_stack
+  return loaded_stack, run_err
+}
+
 // ( filename:string -- object )
 // Runs filename like RUN runs a string, but on an isolated scratch stack --
 // a bug in the loaded file can't corrupt the caller's stack, and is
@@ -23,12 +36,7 @@ builtin_load_object :: proc(interp: ^Interpreter) -> Error {
     return err
   }
 
-  caller_stack := interp.stack
-  interp.stack = Stack{items = make([dynamic]Forthic_Value, 0, interp.default_allocator)}
-
-  run_err := interpreter_run_file(interp, filename)
-  loaded_stack := interp.stack
-  interp.stack = caller_stack
+  loaded_stack, run_err := run_file_isolated(interp, filename)
   defer stack_destroy(&loaded_stack)
 
   if run_err != nil {

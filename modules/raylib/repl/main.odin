@@ -31,23 +31,33 @@ main :: proc() {
   sqlite_module := sqlite_forthic.sqlite_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, sqlite_module, "sqlite")
 
+  history_module, history_err := forthic.module_create_from_forthic_file(&ui_interp, "history", "lib/history.forthic")
+  if history_err != nil {
+    fmt.println(history_err)
+    os.exit(1)
+  }
+  forthic.interpreter_register_and_import_module(&ui_interp, history_module, "history")
+
   queue: forthic.Mirror_Job_Queue
 
   repl_interp: forthic.Interpreter
   forthic.interpreter_init(&repl_interp)
   defer forthic.interpreter_destroy(&repl_interp)
 
-  raylib_mirror_module := forthic.module_mirror(raylib_module, &ui_interp, &queue)
+  raylib_mirror_module := forthic.module_mirror(raylib_module, &ui_interp, "raylib", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, raylib_mirror_module, "raylib")
 
-  dungeon_mirror_module := forthic.module_mirror(dungeon_module, &ui_interp, &queue)
+  dungeon_mirror_module := forthic.module_mirror(dungeon_module, &ui_interp, "dungeon", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, dungeon_mirror_module, "dungeon")
 
-  log_mirror_module := forthic.module_mirror(log_module, &ui_interp, &queue)
+  log_mirror_module := forthic.module_mirror(log_module, &ui_interp, "log", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, log_mirror_module, "log")
 
-  sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, &queue)
+  sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, "sqlite", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, sqlite_mirror_module, "sqlite")
+
+  history_mirror_module := forthic.module_mirror(history_module, &ui_interp, "history", &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, history_mirror_module, "history")
 
   if len(os.args) > 1 {
     err := forthic.interpreter_run_file(&ui_interp, os.args[1])
