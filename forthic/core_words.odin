@@ -34,6 +34,7 @@ core_module_create :: proc() -> ^Module {
   module_add_builtin_word(core_module, "!@", builtin_set_and_get_variable, "( value name -- value )", "Sets a variable and returns the value", {`5 .x !@`})
 
   module_add_builtin_word(core_module, "RUN", builtin_run, "( forthic:string -- ? )", "Runs a Forthic string in the current context", {`"1 2 +" RUN`})
+  module_add_builtin_word(core_module, "LOAD-OBJECT", builtin_load_object, "( filename:string -- object )", "Runs a Forthic file like RUN runs a string, on an isolated stack, and requires it to leave exactly one value", {`"locations/goblin-warren/location.forthic" LOAD-OBJECT`})
   module_add_builtin_word(core_module, "TIMES-RUN", builtin_times_run, "( num_times:int forthic:string -- ? )", "Runs a Forthic string num_times; no per-iteration value is passed automatically", {`3 "1 +" TIMES-RUN`})
   module_add_builtin_word(core_module, "IF", builtin_if, "( bool then_value else_value -- chosen )", "Pushes then_value if bool is true, else else_value", {`TRUE 1 2 IF  # => 1`})
   module_add_builtin_word(core_module, "IF-RUN", builtin_if_run, "( bool then_forthic else_forthic -- ? )", "Runs then_forthic if bool is true, else else_forthic", {`TRUE "1" "2" IF-RUN  # => 1`})

@@ -1,4 +1,5 @@
-[ .player-x .player-y            # Player position in the dungeon grid
+[ .location                      # The currently loaded location: { .name .description .start .grid .features .exits }
+  .player-x .player-y            # Player position in the dungeon grid
   .player-facing                 # Current facing: "N" "E" "S" or "W"
 
   .scan-depth                    # DRAW-VISIBLE-WALLS' scan depth; shared because each TIMES-RUN step is its own call
@@ -23,16 +24,6 @@
 : LOG-VISIBLE-COUNT   5 ;
 : FONT-SIZE   16;
 
-: DUNGEON
-  [ "#######"
-    "#.....#"
-    "#.###.#"
-    "#.#...#"
-    "#.#.###"
-    "#.....#"
-    "#######" ]
-;
-
 : INITIAL-PARTY
   [ { .name "Thorin" .hp 24 .max-hp 24 }
     { .name "Elara"  .hp 16 .max-hp 18 }
@@ -41,9 +32,10 @@
 ;
 
 : RESET-GAME-STATE
-  1 .player-x !
-  1 .player-y !
-  "E" .player-facing !
+  .location @ .start JQ@ .start-pos !
+  .start-pos @ .x JQ@ .player-x !
+  .start-pos @ .y JQ@ .player-y !
+  .start-pos @ .facing JQ@ .player-facing !
   0 .turn-count !
   INITIAL-PARTY .party !
 ;
@@ -66,6 +58,7 @@
   "dungeon_history.db" sqlite.OPEN
   HISTORY-SCHEMA
   LOAD-HISTORY-HEAD
+  "modules/raylib/repl/locations/goblin-warren/location.forthic" LOAD-OBJECT .location !
   NOW-MS .last-action-ms !
   FALSE .replaying? !
   RESET-GAME-STATE
@@ -166,7 +159,7 @@
 
 : TRY-MOVE-FORWARD
   NEXT-TURN
-  DUNGEON .player-x @ FACING-DX + .player-y @ FACING-DY + dungeon.IS-WALL?
+  .location @ .grid JQ@ .player-x @ FACING-DX + .player-y @ FACING-DY + dungeon.IS-WALL?
   DUP .move-blocked !
   NOT
   ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
@@ -177,7 +170,7 @@
 
 : TRY-MOVE-BACKWARD
   NEXT-TURN
-  DUNGEON .player-x @ FACING-DX - .player-y @ FACING-DY - dungeon.IS-WALL?
+  .location @ .grid JQ@ .player-x @ FACING-DX - .player-y @ FACING-DY - dungeon.IS-WALL?
   DUP .move-blocked !
   NOT
   ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
@@ -188,7 +181,7 @@
 
 : DRAW-WALL-AT
   .wall-y ! .wall-x !
-  DUNGEON .wall-x @ .wall-y @ dungeon.IS-WALL?
+  .location @ .grid JQ@ .wall-x @ .wall-y @ dungeon.IS-WALL?
   "{ .x .wall-x @ 0.5 + .y 0.5 .z .wall-y @ 0.5 + .width 1 .height 1 .length 1 .color { .r 120 .g 120 .b 130 .a 255 } } raylib.DRAW-CUBE"
   WHEN
 ;

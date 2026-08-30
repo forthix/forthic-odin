@@ -12,6 +12,37 @@ builtin_run :: proc(interp: ^Interpreter) -> Error {
   return interpreter_run(interp, Positioned_Forthic{source, nil})
 }
 
+// ( filename:string -- object )
+// Runs filename like RUN runs a string, but on an isolated scratch stack --
+// a bug in the loaded file can't corrupt the caller's stack, and is
+// reported as a clear error instead of silent corruption. The file must
+// leave exactly one value.
+builtin_load_object :: proc(interp: ^Interpreter) -> Error {
+  filename, err := pop_string(interp, "LOAD-OBJECT")
+  if err != nil {
+    return err
+  }
+
+  caller_stack := interp.stack
+  interp.stack = Stack{items = make([dynamic]Forthic_Value, 0, interp.default_allocator)}
+
+  run_err := interpreter_run_file(interp, filename)
+  loaded_stack := interp.stack
+  interp.stack = caller_stack
+  defer stack_destroy(&loaded_stack)
+
+  if run_err != nil {
+    return run_err
+  }
+  if stack_len(&loaded_stack) != 1 {
+    return Type_Mismatch{note = "LOAD-OBJECT requires the file to leave exactly one value on the stack"}
+  }
+
+  object, _ := stack_pop(&loaded_stack)
+  stack_push(&interp.stack, object)
+  return nil
+}
+
 // ( num_times:int forthic:string -- ? )
 builtin_times_run :: proc(interp: ^Interpreter) -> Error {
   source, source_err := pop_string(interp, "TIMES-RUN")
