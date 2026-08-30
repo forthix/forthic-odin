@@ -27,6 +27,11 @@ log_module_create :: proc() -> ^forthic.Module {
     "Gets an entry by index (0 = oldest). Out-of-range returns nil.",
     {"0 log.LINE"},
   )
+  forthic.module_add_builtin_word(
+    log_module, "CLEAR", builtin_log_clear, "( -- )",
+    "Removes all entries. Used when rebuilding the log from replayed history.",
+    {"log.CLEAR"},
+  )
 
   return log_module
 }
@@ -43,6 +48,11 @@ builtin_log_append :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
 
 builtin_log_count :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   forthic.stack_push(&interp.stack, forthic.Forthic_Value(i64(len(messages))))
+  return nil
+}
+
+builtin_log_clear :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
+  clear(&messages)
   return nil
 }
 

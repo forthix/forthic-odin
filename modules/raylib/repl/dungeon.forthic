@@ -1,4 +1,6 @@
-[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth .log-row .turn-count .log-message-text .log-entry .log-index ] VARIABLES
+[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth .log-row .turn-count .log-message-text .log-entry .log-index
+  .move-blocked .history-head .last-action-ms .history-action .history-turn .history-outcome .now-ms .elapsed-ms
+  .replaying? .restore-event-id .replay-rows .replay-index ] VARIABLES
 
 : MAX-SCAN-DEPTH 7 ;
 : LOG-VISIBLE-COUNT 5 ;
@@ -13,14 +15,34 @@
     "#######" ]
 ;
 
-: ON-INITIALIZE-APP
-  { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
-  60 raylib.SET-TARGET-FPS
-  "/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT
+: RESET-GAME-STATE
   1 .player-x !
   1 .player-y !
   "E" .player-facing !
   0 .turn-count !
+;
+
+: HISTORY-SCHEMA
+  "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER REFERENCES events(id), turn INTEGER NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL, elapsed_ms INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))" sqlite.EXEC
+  "CREATE TABLE IF NOT EXISTS session (id INTEGER PRIMARY KEY CHECK (id = 1), head_event_id INTEGER REFERENCES events(id))" sqlite.EXEC
+  "INSERT OR IGNORE INTO session (id, head_event_id) VALUES (1, NULL)" sqlite.EXEC
+;
+
+: LOAD-HISTORY-HEAD
+  "SELECT head_event_id FROM session WHERE id = 1" [ ] sqlite.QUERY-WITH
+  0 NTH .head_event_id JQ@ .history-head !
+;
+
+: ON-INITIALIZE-APP
+  { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
+  60 raylib.SET-TARGET-FPS
+  "/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT
+  "dungeon_history.db" sqlite.OPEN
+  HISTORY-SCHEMA
+  LOAD-HISTORY-HEAD
+  NOW-MS .last-action-ms !
+  FALSE .replaying? !
+  RESET-GAME-STATE
 ;
 
 : ON-REGISTER-HANDLERS ;
@@ -58,31 +80,84 @@
   log.APPEND
 ;
 
-: TURN-RIGHT NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE ;
-: TURN-LEFT NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE ;
+# Event-sourced history: every real player action (success or failure) is
+# recorded as a row in `events`, chained via parent_id off .history-head.
+# .replaying? suppresses recording while HISTORY-RESTORE-TO reconstructs
+# state by re-running a stored action sequence, so replay never creates
+# duplicate/branching writes on its own.
+: HISTORY-RECORD-NOW
+  NOW-MS .now-ms !
+  .now-ms @ .last-action-ms @ - .elapsed-ms !
+  .now-ms @ .last-action-ms !
+  "INSERT INTO events (parent_id, turn, action, outcome, elapsed_ms) VALUES (?, ?, ?, ?, ?)"
+  [ .history-head @ .history-turn @ .history-action @ .history-outcome @ .elapsed-ms @ ]
+  sqlite.EXEC-WITH
+  sqlite.LAST-INSERT-ID .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+;
+
+: HISTORY-RECORD
+  .history-outcome ! .history-turn ! .history-action !
+  .replaying? @ NOT
+  "HISTORY-RECORD-NOW"
+  WHEN
+;
+
+: REPLAY-STEP
+  .replay-rows @ .replay-index @ NTH .action JQ@ RUN
+  .replay-index @ 1 + .replay-index !
+;
+
+# Restores to an earlier event and rebuilds state by replaying the action
+# sequence from root to it (via one recursive-CTE query for the whole
+# chain). Recording a new action afterwards forks a new branch from here,
+# since .history-head now points at event-id instead of the old tip.
+: HISTORY-RESTORE-TO
+  .restore-event-id !
+  TRUE .replaying? !
+
+  "WITH RECURSIVE chain(id, parent_id, action) AS ( SELECT id, parent_id, action FROM events WHERE id = ? UNION ALL SELECT e.id, e.parent_id, e.action FROM events e JOIN chain c ON e.id = c.parent_id ) SELECT action FROM chain ORDER BY id ASC"
+  [ .restore-event-id @ ]
+  sqlite.QUERY-WITH
+  .replay-rows !
+
+  RESET-GAME-STATE
+  log.CLEAR
+
+  0 .replay-index !
+  .replay-rows @ LENGTH "REPLAY-STEP" TIMES-RUN
+
+  .restore-event-id @ .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+
+  FALSE .replaying? !
+;
+
+: TURN-RIGHT NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" HISTORY-RECORD ;
+: TURN-LEFT NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" HISTORY-RECORD ;
 
 : CANT-GO-THAT-WAY "\"You can't go that way.\" LOG-MESSAGE" ;
 
 : TRY-MOVE-FORWARD
   NEXT-TURN
-  DUNGEON
-  .player-x @ FACING-DX +
-  .player-y @ FACING-DY +
-  dungeon.IS-WALL? NOT
+  DUNGEON .player-x @ FACING-DX + .player-y @ FACING-DY + dungeon.IS-WALL?
+  DUP .move-blocked !
+  NOT
   ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
   CANT-GO-THAT-WAY
   IF-RUN
+  "TRY-MOVE-FORWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
 ;
 
 : TRY-MOVE-BACKWARD
   NEXT-TURN
-  DUNGEON
-  .player-x @ FACING-DX -
-  .player-y @ FACING-DY -
-  dungeon.IS-WALL? NOT
+  DUNGEON .player-x @ FACING-DX - .player-y @ FACING-DY - dungeon.IS-WALL?
+  DUP .move-blocked !
+  NOT
   ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
   CANT-GO-THAT-WAY
   IF-RUN
+  "TRY-MOVE-BACKWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
 ;
 
 : DRAW-WALL-AT

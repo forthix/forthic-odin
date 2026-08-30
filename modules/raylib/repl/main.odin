@@ -12,6 +12,7 @@ import "../../../forthic"
 import raylib_forthic "../"
 import dungeon_forthic "../../dungeon"
 import log_forthic "../../log"
+import sqlite_forthic "../../sqlite"
 
 main :: proc() {
   ui_interp: forthic.Interpreter
@@ -27,6 +28,9 @@ main :: proc() {
   log_module := log_forthic.log_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, log_module, "log")
 
+  sqlite_module := sqlite_forthic.sqlite_module_create()
+  forthic.interpreter_register_and_import_module(&ui_interp, sqlite_module, "sqlite")
+
   queue: forthic.Mirror_Job_Queue
 
   repl_interp: forthic.Interpreter
@@ -41,6 +45,9 @@ main :: proc() {
 
   log_mirror_module := forthic.module_mirror(log_module, &ui_interp, &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, log_mirror_module, "log")
+
+  sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, sqlite_mirror_module, "sqlite")
 
   if len(os.args) > 1 {
     err := forthic.interpreter_run_file(&ui_interp, os.args[1])
