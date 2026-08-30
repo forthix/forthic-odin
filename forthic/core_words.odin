@@ -19,6 +19,9 @@ core_module_create :: proc() -> ^Module {
   module_add_builtin_word(core_module, "END-MODULE", builtin_end_module, "( -- )", "Pop the current module from the module stack", {})
   module_add_builtin_word(core_module, "APP-MODULE", builtin_app_module, "( -- )", "Make the application module the current module", {})
 
+  module_add_builtin_word(core_module, ">STR", builtin_to_str, "( item -- string )", "Converts a value to a string", {`5 >STR  # => "5"`})
+  module_add_builtin_word(core_module, "CONCAT", builtin_concat, "( strings:array -- result:string )", "Concatenates an array of strings into one string", {`[ "a" "b" ] CONCAT  # => "ab"`})
+
   module_add_builtin_word(core_module, "JQ@", builtin_jq_at, "( container path -- value )", "Drills into a record/array by a path of dot-symbol/string fields and int indices; a bare (non-array) path is one segment. nil on any miss.", {`{ .E 1 .W -1 } .E JQ@  # => 1`})
 
   module_add_builtin_word(core_module, "VARIABLES", builtin_variables, "( names:array -- )", "Declares variables (by name) in the current module", {`[ .x .y ] VARIABLES`})

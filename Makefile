@@ -3,7 +3,9 @@
 RAYLIB_BIN := bin/raylib_repl
 RAYLIB_SRCS := $(filter-out %_test.odin, $(wildcard forthic/*.odin)) \
                $(wildcard modules/raylib/*.odin) \
-               $(wildcard modules/raylib/repl/*.odin)
+               $(wildcard modules/raylib/repl/*.odin) \
+               $(wildcard modules/dungeon/*.odin) \
+               $(wildcard modules/log/*.odin)
 
 repl:
 	odin run repl

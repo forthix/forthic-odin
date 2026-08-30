@@ -4,9 +4,19 @@ import "core:strings"
 import "vendor:raylib"
 import "../../forthic"
 
+// Set by raylib.LOAD-FONT; DRAW-TEXT falls back to raylib's built-in font
+// when no custom font has been loaded.
+current_font: raylib.Font
+has_custom_font: bool
+
 raylib_module_create :: proc() -> ^forthic.Module {
   raylib_module := forthic.module_create("raylib")
 
+  forthic.module_add_builtin_word(
+    raylib_module, "LOAD-FONT", builtin_load_font, "( path:string size:int -- )",
+    "Loads a TrueType/OpenType font file at the given pixel size and makes it the font DRAW-TEXT uses.",
+    {`"/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT`},
+  )
   forthic.module_add_builtin_word(
     raylib_module, "INIT-WINDOW", builtin_init_window, "( record -- )",
     "Initializes window and OpenGL context. Fields: width (int, default 800), height (int, default 600), title (string, default \"Forthic\").",
@@ -159,6 +169,34 @@ builtin_draw_rectangle :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   return nil
 }
 
+builtin_load_font :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
+  size_value, size_err := forthic.stack_pop(&interp.stack)
+  if size_err != nil {
+    return size_err
+  }
+  path_value, path_err := forthic.stack_pop(&interp.stack)
+  if path_err != nil {
+    return path_err
+  }
+
+  path, is_string := path_value.(string)
+  size, is_int := size_value.(i64)
+  if !is_string || !is_int {
+    return forthic.Type_Mismatch{note = "LOAD-FONT requires (path:string size:int)"}
+  }
+
+  if has_custom_font {
+    raylib.UnloadFont(current_font)
+  }
+
+  path_cstring := strings.clone_to_cstring(path)
+  defer delete(path_cstring)
+
+  current_font = raylib.LoadFontEx(path_cstring, i32(size), nil, 0)
+  has_custom_font = true
+  return nil
+}
+
 builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   record, err := forthic.stack_pop_record(&interp.stack, "DRAW-TEXT requires a record with text, posX, posY, fontSize, color")
   if err != nil {
@@ -175,7 +213,8 @@ builtin_draw_text :: proc(interp: ^forthic.Interpreter) -> forthic.Error {
   defer delete(text_cstring)
 
   color := record_to_color(color_record)
-  raylib.DrawText(text_cstring, i32(posX), i32(posY), i32(fontSize), color)
+  font := has_custom_font ? current_font : raylib.GetFontDefault()
+  raylib.DrawTextEx(font, text_cstring, raylib.Vector2{f32(posX), f32(posY)}, f32(fontSize), f32(fontSize) * 0.1, color)
   return nil
 }
 

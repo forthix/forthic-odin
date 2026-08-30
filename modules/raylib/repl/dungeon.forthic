@@ -1,6 +1,7 @@
-[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth ] VARIABLES
+[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth .log-row .turn-count .log-message-text .log-entry .log-index ] VARIABLES
 
 : MAX-SCAN-DEPTH 7 ;
+: LOG-VISIBLE-COUNT 5 ;
 
 : DUNGEON
   [ "#######"
@@ -15,9 +16,11 @@
 : ON-INITIALIZE-APP
   { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
   60 raylib.SET-TARGET-FPS
+  "/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT
   1 .player-x !
   1 .player-y !
   "E" .player-facing !
+  0 .turn-count !
 ;
 
 : ON-REGISTER-HANDLERS ;
@@ -45,25 +48,41 @@
   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
 ;
 
-: TURN-RIGHT NEXT-FACING-CW .player-facing ! PRINT-STATE ;
-: TURN-LEFT NEXT-FACING-CCW .player-facing ! PRINT-STATE ;
+: NEXT-TURN .turn-count @ 1 + .turn-count ! ;
+
+# Stores the turn number and message text as separate fields, so the log
+# can render them in separate columns instead of one formatted string.
+: LOG-MESSAGE
+  .log-message-text !
+  { .turn .turn-count @ .text .log-message-text @ }
+  log.APPEND
+;
+
+: TURN-RIGHT NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE ;
+: TURN-LEFT NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE ;
+
+: CANT-GO-THAT-WAY "\"You can't go that way.\" LOG-MESSAGE" ;
 
 : TRY-MOVE-FORWARD
+  NEXT-TURN
   DUNGEON
   .player-x @ FACING-DX +
   .player-y @ FACING-DY +
   dungeon.IS-WALL? NOT
   ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
-  WHEN
+  CANT-GO-THAT-WAY
+  IF-RUN
 ;
 
 : TRY-MOVE-BACKWARD
+  NEXT-TURN
   DUNGEON
   .player-x @ FACING-DX -
   .player-y @ FACING-DY -
   dungeon.IS-WALL? NOT
   ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
-  WHEN
+  CANT-GO-THAT-WAY
+  IF-RUN
 ;
 
 : DRAW-WALL-AT
@@ -96,6 +115,48 @@
   MAX-SCAN-DEPTH "SCAN-DEPTH-STEP" TIMES-RUN
 ;
 
+# First absolute log.LINE index to show, so the visible window is always
+# the most recent LOG-VISIBLE-COUNT messages (or fewer, early in a session).
+: LOG-WINDOW-START
+  log.COUNT LOG-VISIBLE-COUNT <
+  0
+  log.COUNT LOG-VISIBLE-COUNT -
+  IF
+;
+
+: LOG-ROW-Y .log-row @ 1 - 20 * 480 + ;
+
+: DRAW-LOG-ENTRY
+  .log-index @ log.LINE .log-entry !
+
+  { .text  [ "Turn " .log-entry @ .turn JQ@ >STR ] CONCAT
+    .posX 10
+    .posY LOG-ROW-Y
+    .fontSize 16
+    .color { .r 150 .g 150 .b 170 .a 255 } }
+  raylib.DRAW-TEXT
+
+  { .text  .log-entry @ .text JQ@
+    .posX 100
+    .posY LOG-ROW-Y
+    .fontSize 16
+    .color { .r 255 .g 255 .b 255 .a 255 } }
+  raylib.DRAW-TEXT
+;
+
+: DRAW-LOG-ROW-STEP
+  .log-row @ 1 + .log-row !
+  .log-row @ 1 - LOG-WINDOW-START + .log-index !
+  .log-index @ log.COUNT <
+  "DRAW-LOG-ENTRY" WHEN
+;
+
+: DRAW-MESSAGE-LOG
+  { .x 0 .y 470 .width 800 .height 130 .color { .r 0 .g 0 .b 0 .a 150 } } raylib.DRAW-RECTANGLE
+  0 .log-row !
+  LOG-VISIBLE-COUNT "DRAW-LOG-ROW-STEP" TIMES-RUN
+;
+
 : ON-DRAW-FRAME
   "W" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
   "UP" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
@@ -115,5 +176,8 @@
   DRAW-VISIBLE-WALLS
 
   raylib.END-MODE-3D
+
+  DRAW-MESSAGE-LOG
+
   raylib.END-DRAWING
 ;

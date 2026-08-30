@@ -11,6 +11,7 @@ import "vendor:raylib"
 import "../../../forthic"
 import raylib_forthic "../"
 import dungeon_forthic "../../dungeon"
+import log_forthic "../../log"
 
 main :: proc() {
   ui_interp: forthic.Interpreter
@@ -23,6 +24,9 @@ main :: proc() {
   dungeon_module := dungeon_forthic.dungeon_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, dungeon_module, "dungeon")
 
+  log_module := log_forthic.log_module_create()
+  forthic.interpreter_register_and_import_module(&ui_interp, log_module, "log")
+
   queue: forthic.Mirror_Job_Queue
 
   repl_interp: forthic.Interpreter
@@ -34,6 +38,9 @@ main :: proc() {
 
   dungeon_mirror_module := forthic.module_mirror(dungeon_module, &ui_interp, &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, dungeon_mirror_module, "dungeon")
+
+  log_mirror_module := forthic.module_mirror(log_module, &ui_interp, &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, log_mirror_module, "log")
 
   if len(os.args) > 1 {
     err := forthic.interpreter_run_file(&ui_interp, os.args[1])
