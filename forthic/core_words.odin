@@ -3,30 +3,62 @@ package forthic
 core_module_create :: proc() -> ^Module {
   core_module := module_create("core")
 
-  module_add_native_word(core_module, "~>", native_set_options, "( options -- )", "Sets pending word options", {})
+  module_add_builtin_word(core_module, "~>", builtin_set_options, "( options -- )", "Sets pending word options", {})
+  module_add_builtin_word(core_module, "PRINT", builtin_print, "( a -- )", "Prints the top of stack to stdout, for debugging", {`"hi" PRINT`})
+  module_add_builtin_word(core_module, "LENGTH", builtin_length, "( container -- length:int )", "Length of an array or record", {`[ 1 2 3 ] LENGTH  # => 3`})
+  module_add_builtin_word(core_module, "NTH", builtin_nth, "( container:array n:int -- item )", "Gets the nth (0-indexed) element of an array; nil if out of range", {`[ 10 20 30 ] 1 NTH  # => 20`})
+  module_add_builtin_word(core_module, "NOW-MS", builtin_now_ms, "( -- ms:int )", "Current Unix time in milliseconds", {"NOW-MS"})
 
-  module_add_native_word(core_module, "DROP", native_drop, "( a -- )", "Drops top of stack", {})
-  module_add_native_word(core_module, "DUP", native_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
-  module_add_native_word(core_module, "SWAP", native_swap, "( a b -- b a )", "Swap the top two stack items", {"1 2 SWAP  # => 2 1"})
+  module_add_builtin_word(core_module, "DROP", builtin_drop, "( a -- )", "Drops top of stack", {})
+  module_add_builtin_word(core_module, "DUP", builtin_dup, "( a -- a a )", "Duplicate top of stack", {"5 DUP  # => 5 5"})
+  module_add_builtin_word(core_module, "SWAP", builtin_swap, "( a b -- b a )", "Swap the top two stack items", {"1 2 SWAP  # => 2 1"})
 
-  module_add_native_word(core_module, "+", native_add, "( a:number b:number -- sum:number )", "Add two numbers", {})
-  module_add_native_word(core_module, "-", native_subtract, "( a:number b:number -- difference:number )", "Subtracts two numbers", {})
-  module_add_native_word(core_module, "*", native_multiply, "( a:number b:number -- product:number )", "Multiplies two numbers", {})
-  module_add_native_word(core_module, "/", native_divide, "( a:number b:number -- quotient:number )", "Divides two numbers", {})
+  module_add_builtin_word(core_module, "+", builtin_add, "( a:number b:number -- sum:number )", "Add two numbers", {})
+  module_add_builtin_word(core_module, "-", builtin_subtract, "( a:number b:number -- difference:number )", "Subtracts two numbers", {})
+  module_add_builtin_word(core_module, "*", builtin_multiply, "( a:number b:number -- product:number )", "Multiplies two numbers", {})
+  module_add_builtin_word(core_module, "/", builtin_divide, "( a:number b:number -- quotient:number )", "Divides two numbers", {})
 
-  module_add_native_word(core_module, "MODULE", native_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
-  module_add_native_word(core_module, "END-MODULE", native_end_module, "( -- )", "Pop the current module from the module stack", {})
-  module_add_native_word(core_module, "APP-MODULE", native_app_module, "( -- )", "Make the application module the current module", {})
+  module_add_builtin_word(core_module, "MODULE", builtin_module, "( module_name:string -- )", "Find or create submodule in current module and make it the current module", {})
+  module_add_builtin_word(core_module, "END-MODULE", builtin_end_module, "( -- )", "Pop the current module from the module stack", {})
+  module_add_builtin_word(core_module, "APP-MODULE", builtin_app_module, "( -- )", "Make the application module the current module", {})
+
+  module_add_builtin_word(core_module, ">STR", builtin_to_str, "( item -- string )", "Converts a value to a string", {`5 >STR  # => "5"`})
+  module_add_builtin_word(core_module, "CONCAT", builtin_concat, "( strings:array -- result:string )", "Concatenates an array of strings into one string", {`[ "a" "b" ] CONCAT  # => "ab"`})
+
+  module_add_builtin_word(core_module, "JQ@", builtin_jq_at, "( container path -- value )", "Drills into a record/array by a path of dot-symbol/string fields and int indices; a bare (non-array) path is one segment. nil on any miss.", {`{ .E 1 .W -1 } .E JQ@  # => 1`})
+
+  module_add_builtin_word(core_module, "VARIABLES", builtin_variables, "( names:array -- )", "Declares variables (by name) in the current module", {`[ .x .y ] VARIABLES`})
+  module_add_builtin_word(core_module, "!", builtin_set_variable, "( value name -- )", "Sets a variable's value (name is a dot-symbol or string), declaring it first if needed", {`5 .x !`})
+  module_add_builtin_word(core_module, "@", builtin_get_variable, "( name -- value )", "Gets a variable's value (name is a dot-symbol or string); errors if undeclared", {`.x @`})
+  module_add_builtin_word(core_module, "!@", builtin_set_and_get_variable, "( value name -- value )", "Sets a variable and returns the value", {`5 .x !@`})
+
+  module_add_builtin_word(core_module, "RUN", builtin_run, "( forthic:string -- ? )", "Runs a Forthic string in the current context", {`"1 2 +" RUN`})
+  module_add_builtin_word(core_module, "TIMES-RUN", builtin_times_run, "( num_times:int forthic:string -- ? )", "Runs a Forthic string num_times; no per-iteration value is passed automatically", {`3 "1 +" TIMES-RUN`})
+  module_add_builtin_word(core_module, "IF", builtin_if, "( bool then_value else_value -- chosen )", "Pushes then_value if bool is true, else else_value", {`TRUE 1 2 IF  # => 1`})
+  module_add_builtin_word(core_module, "IF-RUN", builtin_if_run, "( bool then_forthic else_forthic -- ? )", "Runs then_forthic if bool is true, else else_forthic", {`TRUE "1" "2" IF-RUN  # => 1`})
+  module_add_builtin_word(core_module, "WHEN", builtin_when, "( bool forthic -- ? )", "Runs forthic if bool is true, otherwise does nothing", {`TRUE "1 2 +" WHEN`})
+
+  module_add_builtin_word(core_module, "==", builtin_equal, "( a b -- equal:bool )", "Tests equality", {})
+  module_add_builtin_word(core_module, "!=", builtin_not_equal, "( a b -- not_equal:bool )", "Tests inequality", {})
+  module_add_builtin_word(core_module, "<", builtin_less_than, "( a:number b:number -- less:bool )", "Less than", {})
+  module_add_builtin_word(core_module, "<=", builtin_less_equal, "( a:number b:number -- less_equal:bool )", "Less than or equal", {})
+  module_add_builtin_word(core_module, ">", builtin_greater_than, "( a:number b:number -- greater:bool )", "Greater than", {})
+  module_add_builtin_word(core_module, ">=", builtin_greater_equal, "( a:number b:number -- greater_equal:bool )", "Greater than or equal", {})
+  module_add_builtin_word(core_module, "NOT", builtin_not, "( bool -- result:bool )", "Logical NOT", {})
+  module_add_builtin_word(core_module, "AND", builtin_and, "( a:bool b:bool -- result:bool )", "Logical AND", {})
+  module_add_builtin_word(core_module, "OR", builtin_or, "( a:bool b:bool -- result:bool )", "Logical OR", {})
 
   return core_module
 }
 
-native_drop :: proc(interp: ^Interpreter) -> Error {
+// ( a -- )
+builtin_drop :: proc(interp: ^Interpreter) -> Error {
   _, err := stack_pop(&interp.stack)
   return err
 }
 
-native_dup :: proc(interp: ^Interpreter) -> Error {
+// ( a -- a a )
+builtin_dup :: proc(interp: ^Interpreter) -> Error {
   top, ok := stack_peek(&interp.stack)
   if !ok {
     return Stack_Underflow{}
@@ -35,7 +67,8 @@ native_dup :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_swap :: proc(interp: ^Interpreter) -> Error {
+// ( a b -- b a )
+builtin_swap :: proc(interp: ^Interpreter) -> Error {
   b_val, b_err := stack_pop(&interp.stack)
   if b_err != nil {
     return b_err
@@ -51,29 +84,33 @@ native_swap :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
-native_add :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "+ requires two numbers",
+// ( a:number b:number -- sum:number )
+builtin_add :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "+ requires two numbers",
     proc(a, b: i64) -> i64 { return a + b },
     proc(a, b: f64) -> f64 { return a + b },
   )
 }
 
 
-native_subtract :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "- requires two numbers",
+// ( a:number b:number -- difference:number )
+builtin_subtract :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "- requires two numbers",
     proc(a, b: i64) -> i64 { return a - b },
     proc(a, b: f64) -> f64 { return a - b },
   )
 }
 
-native_multiply :: proc(interp: ^Interpreter) -> Error {
-  return native_binary_numeric_op(interp, "* requires two numbers",
+// ( a:number b:number -- product:number )
+builtin_multiply :: proc(interp: ^Interpreter) -> Error {
+  return builtin_binary_numeric_op(interp, "* requires two numbers",
     proc(a, b: i64) -> i64 { return a * b },
     proc(a, b: f64) -> f64 { return a * b },
   )
 }
 
-native_divide :: proc(interp: ^Interpreter) -> Error {
+// ( a:number b:number -- quotient:number )
+builtin_divide :: proc(interp: ^Interpreter) -> Error {
   r_val, r_error := stack_pop(&interp.stack)
   if r_error != nil {
     return r_error
@@ -102,7 +139,7 @@ native_divide :: proc(interp: ^Interpreter) -> Error {
 // ----------------------------------------------------------------------------
 
 
-native_binary_numeric_op :: proc(
+builtin_binary_numeric_op :: proc(
   interp: ^Interpreter,
   note: string,
   int_op: proc(a, b: i64) -> i64,

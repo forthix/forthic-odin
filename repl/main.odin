@@ -39,6 +39,9 @@ main :: proc() {
     }
 
     positioned_forthic := forthic.Positioned_Forthic{line, nil}
-    fmt.println(forthic.interpreter_run(&interp, positioned_forthic))
+    if run_err := forthic.interpreter_run(&interp, positioned_forthic); run_err != nil {
+      fmt.println(run_err)
+    }
+    fmt.println(interp.stack.items[:])
   }
 }

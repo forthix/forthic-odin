@@ -1,0 +1,258 @@
+[ .player-x .player-y .player-facing .wall-x .wall-y .depth .lat .scan-depth .log-row .turn-count .log-message-text .log-entry .log-index
+  .move-blocked .history-head .last-action-ms .history-action .history-turn .history-outcome .now-ms .elapsed-ms
+  .replaying? .restore-event-id .replay-rows .replay-index ] VARIABLES
+
+: MAX-SCAN-DEPTH 7 ;
+: LOG-VISIBLE-COUNT 5 ;
+
+: DUNGEON
+  [ "#######"
+    "#.....#"
+    "#.###.#"
+    "#.#...#"
+    "#.#.###"
+    "#.....#"
+    "#######" ]
+;
+
+: RESET-GAME-STATE
+  1 .player-x !
+  1 .player-y !
+  "E" .player-facing !
+  0 .turn-count !
+;
+
+: HISTORY-SCHEMA
+  "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER REFERENCES events(id), turn INTEGER NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL, elapsed_ms INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))" sqlite.EXEC
+  "CREATE TABLE IF NOT EXISTS session (id INTEGER PRIMARY KEY CHECK (id = 1), head_event_id INTEGER REFERENCES events(id))" sqlite.EXEC
+  "INSERT OR IGNORE INTO session (id, head_event_id) VALUES (1, NULL)" sqlite.EXEC
+;
+
+: LOAD-HISTORY-HEAD
+  "SELECT head_event_id FROM session WHERE id = 1" [ ] sqlite.QUERY-WITH
+  0 NTH .head_event_id JQ@ .history-head !
+;
+
+: ON-INITIALIZE-APP
+  { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
+  60 raylib.SET-TARGET-FPS
+  "/System/Library/Fonts/SFNSMono.ttf" 16 raylib.LOAD-FONT
+  "dungeon_history.db" sqlite.OPEN
+  HISTORY-SCHEMA
+  LOAD-HISTORY-HEAD
+  NOW-MS .last-action-ms !
+  FALSE .replaying? !
+  RESET-GAME-STATE
+;
+
+: ON-REGISTER-HANDLERS ;
+
+: FACING-DX { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@ ;
+: FACING-DY { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@ ;
+
+: LEFT-DX  FACING-DY ;
+: LEFT-DY  0 FACING-DX - ;
+
+: CAMERA-X .player-x @ 0.5 + ;
+: CAMERA-Z .player-y @ 0.5 + ;
+: TARGET-X CAMERA-X FACING-DX + ;
+: TARGET-Z CAMERA-Z FACING-DY + ;
+
+# Record values here are strings, not dot-symbols: a dot-symbol immediately
+# followed by another dot-symbol is parsed as a bare boolean flag, not a
+# key/value pair (see collection_words.odin), so back-to-back dot-symbols
+# would silently fail to build the mapping we want.
+: NEXT-FACING-CW  { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@ ;
+: NEXT-FACING-CCW { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@ ;
+
+# Debug helper: prints "x y facing" state to stdout whenever it's called.
+: PRINT-STATE
+  .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
+;
+
+: NEXT-TURN .turn-count @ 1 + .turn-count ! ;
+
+# Stores the turn number and message text as separate fields, so the log
+# can render them in separate columns instead of one formatted string.
+: LOG-MESSAGE
+  .log-message-text !
+  { .turn .turn-count @ .text .log-message-text @ }
+  log.APPEND
+;
+
+# Event-sourced history: every real player action (success or failure) is
+# recorded as a row in `events`, chained via parent_id off .history-head.
+# .replaying? suppresses recording while HISTORY-RESTORE-TO reconstructs
+# state by re-running a stored action sequence, so replay never creates
+# duplicate/branching writes on its own.
+: HISTORY-RECORD-NOW
+  NOW-MS .now-ms !
+  .now-ms @ .last-action-ms @ - .elapsed-ms !
+  .now-ms @ .last-action-ms !
+  "INSERT INTO events (parent_id, turn, action, outcome, elapsed_ms) VALUES (?, ?, ?, ?, ?)"
+  [ .history-head @ .history-turn @ .history-action @ .history-outcome @ .elapsed-ms @ ]
+  sqlite.EXEC-WITH
+  sqlite.LAST-INSERT-ID .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+;
+
+: HISTORY-RECORD
+  .history-outcome ! .history-turn ! .history-action !
+  .replaying? @ NOT
+  "HISTORY-RECORD-NOW"
+  WHEN
+;
+
+: REPLAY-STEP
+  .replay-rows @ .replay-index @ NTH .action JQ@ RUN
+  .replay-index @ 1 + .replay-index !
+;
+
+# Restores to an earlier event and rebuilds state by replaying the action
+# sequence from root to it (via one recursive-CTE query for the whole
+# chain). Recording a new action afterwards forks a new branch from here,
+# since .history-head now points at event-id instead of the old tip.
+: HISTORY-RESTORE-TO
+  .restore-event-id !
+  TRUE .replaying? !
+
+  "WITH RECURSIVE chain(id, parent_id, action) AS ( SELECT id, parent_id, action FROM events WHERE id = ? UNION ALL SELECT e.id, e.parent_id, e.action FROM events e JOIN chain c ON e.id = c.parent_id ) SELECT action FROM chain ORDER BY id ASC"
+  [ .restore-event-id @ ]
+  sqlite.QUERY-WITH
+  .replay-rows !
+
+  RESET-GAME-STATE
+  log.CLEAR
+
+  0 .replay-index !
+  .replay-rows @ LENGTH "REPLAY-STEP" TIMES-RUN
+
+  .restore-event-id @ .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+
+  FALSE .replaying? !
+;
+
+: TURN-RIGHT NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" HISTORY-RECORD ;
+: TURN-LEFT NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" HISTORY-RECORD ;
+
+: CANT-GO-THAT-WAY "\"You can't go that way.\" LOG-MESSAGE" ;
+
+: TRY-MOVE-FORWARD
+  NEXT-TURN
+  DUNGEON .player-x @ FACING-DX + .player-y @ FACING-DY + dungeon.IS-WALL?
+  DUP .move-blocked !
+  NOT
+  ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
+  CANT-GO-THAT-WAY
+  IF-RUN
+  "TRY-MOVE-FORWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
+;
+
+: TRY-MOVE-BACKWARD
+  NEXT-TURN
+  DUNGEON .player-x @ FACING-DX - .player-y @ FACING-DY - dungeon.IS-WALL?
+  DUP .move-blocked !
+  NOT
+  ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
+  CANT-GO-THAT-WAY
+  IF-RUN
+  "TRY-MOVE-BACKWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF HISTORY-RECORD
+;
+
+: DRAW-WALL-AT
+  .wall-y ! .wall-x !
+  DUNGEON .wall-x @ .wall-y @ dungeon.IS-WALL?
+  "{ .x .wall-x @ 0.5 + .y 0.5 .z .wall-y @ 0.5 + .width 1 .height 1 .length 1 .color { .r 120 .g 120 .b 130 .a 255 } } raylib.DRAW-CUBE"
+  WHEN
+;
+
+# depth: how many cells ahead (along facing). lat: how many cells to the
+# left (negative = right). Draws a wall cube at that offset, if there is one.
+: DRAW-WALL-AHEAD
+  .lat ! .depth !
+  .player-x @ .depth @ FACING-DX * + .lat @ LEFT-DX * +
+  .player-y @ .depth @ FACING-DY * + .lat @ LEFT-DY * +
+  DRAW-WALL-AT
+;
+
+# One step of the forward scan: advances .scan-depth and draws straight
+# ahead plus immediate left/right flanking, at that depth.
+: SCAN-DEPTH-STEP
+  .scan-depth @ 1 + .scan-depth !
+  .scan-depth @ 0  DRAW-WALL-AHEAD
+  .scan-depth @ 1  DRAW-WALL-AHEAD
+  .scan-depth @ -1 DRAW-WALL-AHEAD
+;
+
+: DRAW-VISIBLE-WALLS
+  0 .scan-depth !
+  MAX-SCAN-DEPTH "SCAN-DEPTH-STEP" TIMES-RUN
+;
+
+# First absolute log.LINE index to show, so the visible window is always
+# the most recent LOG-VISIBLE-COUNT messages (or fewer, early in a session).
+: LOG-WINDOW-START
+  log.COUNT LOG-VISIBLE-COUNT <
+  0
+  log.COUNT LOG-VISIBLE-COUNT -
+  IF
+;
+
+: LOG-ROW-Y .log-row @ 1 - 20 * 480 + ;
+
+: DRAW-LOG-ENTRY
+  .log-index @ log.LINE .log-entry !
+
+  { .text  [ "Turn " .log-entry @ .turn JQ@ >STR ] CONCAT
+    .posX 10
+    .posY LOG-ROW-Y
+    .fontSize 16
+    .color { .r 150 .g 150 .b 170 .a 255 } }
+  raylib.DRAW-TEXT
+
+  { .text  .log-entry @ .text JQ@
+    .posX 100
+    .posY LOG-ROW-Y
+    .fontSize 16
+    .color { .r 255 .g 255 .b 255 .a 255 } }
+  raylib.DRAW-TEXT
+;
+
+: DRAW-LOG-ROW-STEP
+  .log-row @ 1 + .log-row !
+  .log-row @ 1 - LOG-WINDOW-START + .log-index !
+  .log-index @ log.COUNT <
+  "DRAW-LOG-ENTRY" WHEN
+;
+
+: DRAW-MESSAGE-LOG
+  { .x 0 .y 470 .width 800 .height 130 .color { .r 0 .g 0 .b 0 .a 150 } } raylib.DRAW-RECTANGLE
+  0 .log-row !
+  LOG-VISIBLE-COUNT "DRAW-LOG-ROW-STEP" TIMES-RUN
+;
+
+: ON-DRAW-FRAME
+  "W" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
+  "UP" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
+  "S" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
+  "DOWN" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
+  "A" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
+  "LEFT" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
+  "D" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
+  "RIGHT" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
+
+  raylib.BEGIN-DRAWING
+  { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
+
+  { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
+  { .slices 20 .spacing 1 } raylib.DRAW-GRID
+
+  DRAW-VISIBLE-WALLS
+
+  raylib.END-MODE-3D
+
+  DRAW-MESSAGE-LOG
+
+  raylib.END-DRAWING
+;

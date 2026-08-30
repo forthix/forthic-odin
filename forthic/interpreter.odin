@@ -56,7 +56,7 @@ interpreter_init :: proc(interp: ^Interpreter) {
   context.allocator = interpreter_arena_allocator(interp)
 
   app_module := module_create("")
-  module_import_words(app_module, core_module_create()) 
+  module_import_words(app_module, core_module_create())
 
   append(&interp.module_stack, app_module)
 
@@ -173,13 +173,13 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   case .String:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))})
   case .StartArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Native_Word_Proc(native_start_array)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Builtin_Word_Proc(builtin_start_array)})
   case .EndArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Native_Word_Proc(native_end_array)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Builtin_Word_Proc(builtin_end_array)})
   case .StartRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Native_Word_Proc(native_start_record)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Builtin_Word_Proc(builtin_start_record)})
   case .EndRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Native_Word_Proc(native_end_record)})
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Builtin_Word_Proc(builtin_end_record)})
   case:
      return nil
   }
@@ -233,6 +233,7 @@ interpreter_find_word :: proc(interp: ^Interpreter, name: string) -> (Compiled_W
  return {}, false
 }
 
+// This is used to parse the documentation (stack effect/description) for a word defined in Forthic
 interpreter_parse_pending_doc :: proc(interp: ^Interpreter) -> Word_Doc {
   stack_effect: string
   examples: [dynamic]string
