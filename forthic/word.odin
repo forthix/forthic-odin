@@ -45,6 +45,8 @@ compiled_word_execute :: proc(interp: ^Interpreter, word: Compiled_Word) -> Erro
     interp.pending_word_options = nil
     return nil
   case [dynamic]Compiled_Word:
+    append(&interp.local_frames, map[string]Forthic_Value{})
+    defer pop(&interp.local_frames)
     for w in action {
       w_err := compiled_word_execute(interp, w)
       if w_err != nil {

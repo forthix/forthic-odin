@@ -439,9 +439,15 @@ is_word_break :: proc(ch: rune) -> bool {
   }
 }
 
+// Parens and commas are pure visual grouping/punctuation in Forthic source
+// -- no semantics of their own -- so they're skipped like whitespace,
+// matching forthic-ts's tokenizer. Lets a word's argument-unpacking
+// prologue be set apart, e.g. `( .a ! .b ! )`, without that being real
+// syntax. Only affects bare, unquoted characters -- string literals are
+// gathered on a separate code path before whitespace-skipping applies.
 is_whitespace :: proc(ch: rune) -> bool {
   switch ch {
-    case ' ', '\t', '\n', '\r':
+    case ' ', '\t', '\n', '\r', '(', ')', ',':
       return true
     case:
       return false

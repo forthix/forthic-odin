@@ -1,0 +1,16 @@
+{ .name "Goblin Warren"
+  .description "A damp, torch-lit warren dug into the hillside. Something snarls in the dark ahead."
+  .start { .x 1 .y 1 .facing "E" }
+  .grid  [ "#######"
+           "#.....#"
+           "#.###.#"
+           "#.#...#"
+           "#.#.###"
+           "#.....#"
+           "#######" ]
+  .features [ { .x 3 .y 2 .type "door" .locked? TRUE .key "brass-key" }
+              { .x 5 .y 4 .type "trap" .kind "pit" .dc 15
+                .description "A shallow pit, poorly hidden under a layer of straw." }
+              { .x 2 .y 5 .type "treasure" .item "brass-key"
+                .description "A small brass key, half-buried in rubble." } ]
+  .exits [ { .x 1 .y 6 .to "world-map" .entry { .x 4 .y 4 .facing "S" } } ] }

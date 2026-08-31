@@ -33,6 +33,35 @@ builtin_variables :: proc(interp: ^Interpreter) -> Error {
   return nil
 }
 
+// Module variable wins if already declared (so VARIABLES-declared names
+// stay genuinely shared); else the current local frame, auto-created there
+// (so a word's scratch variables are private to that call); else (no active
+// frame -- top-level execution) the module, matching pre-local-scoping
+// behavior.
+set_variable_value :: proc(interp: ^Interpreter, name: string, value: Forthic_Value) {
+  module := interp.module_stack[len(interp.module_stack) - 1]
+  if _, declared := module.variables[name]; declared {
+    module.variables[name] = value
+    return
+  }
+  if len(interp.local_frames) > 0 {
+    interp.local_frames[len(interp.local_frames) - 1][name] = value
+    return
+  }
+  module.variables[name] = value
+}
+
+// Same precedence as set_variable_value; ok is false if declared nowhere.
+get_variable_value :: proc(interp: ^Interpreter, name: string) -> (Forthic_Value, bool) {
+  if len(interp.local_frames) > 0 {
+    if value, declared := interp.local_frames[len(interp.local_frames) - 1][name]; declared {
+      return value, true
+    }
+  }
+  module := interp.module_stack[len(interp.module_stack) - 1]
+  return module.variables[name]
+}
+
 // ( value name -- )
 builtin_set_variable :: proc(interp: ^Interpreter) -> Error {
   name_str, name_err := pop_name(interp, "!")
@@ -44,8 +73,7 @@ builtin_set_variable :: proc(interp: ^Interpreter) -> Error {
     return value_err
   }
 
-  module := interp.module_stack[len(interp.module_stack) - 1]
-  module.variables[name_str] = value
+  set_variable_value(interp, name_str, value)
   return nil
 }
 
@@ -56,8 +84,7 @@ builtin_get_variable :: proc(interp: ^Interpreter) -> Error {
     return err
   }
 
-  module := interp.module_stack[len(interp.module_stack) - 1]
-  value, declared := module.variables[name_str]
+  value, declared := get_variable_value(interp, name_str)
   if !declared {
     return Unknown_Variable{name = name_str}
   }
@@ -77,8 +104,7 @@ builtin_set_and_get_variable :: proc(interp: ^Interpreter) -> Error {
     return value_err
   }
 
-  module := interp.module_stack[len(interp.module_stack) - 1]
-  module.variables[name_str] = value
+  set_variable_value(interp, name_str, value)
   stack_push(&interp.stack, value)
   return nil
 }

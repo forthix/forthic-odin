@@ -20,6 +20,13 @@ Interpreter :: struct {
   // Modules can be opened up from other modules at runtime. This captures that nesting
   module_stack: [dynamic]^Module,
 
+  // Local variable frames, one per active named-word call (pushed/popped in
+  // compiled_word_execute's [dynamic]Compiled_Word case). A name not already
+  // declared as a module variable is auto-created here by `!` instead of at
+  // module scope, so a word's scratch variables don't leak or collide across
+  // calls. Empty (no active frame) at the top level.
+  local_frames: [dynamic]map[string]Forthic_Value,
+
   // Array/record support
   collection_start_positions: [dynamic]Collection_Start,
 
@@ -50,6 +57,7 @@ interpreter_init :: proc(interp: ^Interpreter) {
   // append/delete on it keeps using that same one regardless of what
   // context.allocator becomes afterward.
   interp.stack.items = make([dynamic]Forthic_Value, 0)
+  interp.local_frames = make([dynamic]map[string]Forthic_Value, 0)
   interp.default_allocator = context.allocator
 
   _ = virtual.arena_init_growing(&interp.word_arena)
@@ -71,6 +79,7 @@ interpreter_destroy :: proc(interp: ^Interpreter) {
   stack_destroy(&interp.stack)
   delete(interp.tokenizer_stack)
   delete(interp.module_stack)
+  delete(interp.local_frames)
   virtual.arena_destroy(&interp.word_arena)
 }
 
@@ -82,6 +91,18 @@ interpreter_register_and_import_module :: proc(interp: ^Interpreter, module: ^Mo
   interpreter_register_module(interp, module)
   app_module := interp.module_stack[0]
   module_import_words_prefixed(app_module, module, prefix)
+
+  // Variable names aren't prefixed (a module's own word bodies always
+  // reference them bare, e.g. .replaying?), so copy them in as-is. A no-op
+  // for native (pure-Odin) modules, which never declare any; matters for a
+  // module compiled from Forthic source (module_create_from_forthic_file),
+  // whose VARIABLES live only on the temporary compilation module unless
+  // copied forward here.
+  for name, value in module.variables {
+    if _, declared := app_module.variables[name]; !declared {
+      app_module.variables[name] = value
+    }
+  }
 }
 
 

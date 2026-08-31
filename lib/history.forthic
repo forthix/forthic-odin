@@ -1,0 +1,119 @@
+# Generic event-sourced history: records a sequence of named actions (with
+# outcomes and timing) as a branching chain in SQLite, and can restore to
+# any earlier point by replaying the stored action names via RUN. Restoring
+# and then recording a new action naturally forks a new branch, since
+# .history-head then points at the restored event instead of the old tip.
+#
+# Registered as a fixed-prefix module (see modules/raylib/repl/main.odin),
+# same as raylib/sqlite/log/dungeon -- always accessed as history.WORD.
+#
+# Requires sqlite.OPEN to have already been called (this module only
+# creates its own tables, it doesn't open the database). The caller must
+# define ON-HISTORY-RESET -- a word that returns to a clean starting state
+# -- before calling history.INITIALIZE, which records that reset as the
+# root event (turn 0) the first time history is empty. Every replay --
+# including from the very start -- then just replays the whole chain via
+# REPLAY-STEP, which re-invokes ON-HISTORY-RESET as its first step like any
+# other recorded action; no special-cased reset call is needed.
+# ON-HISTORY-RESET is run via RUN (not a bareword), so it doesn't matter
+# that it's defined later, in the caller's own file.
+
+[ .history-head                  # Current event id at the tip of history (nil before any action)
+  .last-action-ms                # Timestamp of the previous recorded action, for elapsed_ms
+  .history-action .history-turn  # Handed from RECORD to RECORD-NOW; shared across that call
+  .history-outcome               #
+  .replaying?                    # True while RESTORE-TO is replaying (suppresses re-recording)
+  .replay-rows .replay-index     # Replay loop state for REPLAY-STEP; shared, same reason as a TIMES-RUN loop counter
+  ] VARIABLES
+
+: SCHEMA
+  "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER REFERENCES events(id), turn INTEGER NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL, elapsed_ms INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))" sqlite.EXEC
+  "CREATE TABLE IF NOT EXISTS session (id INTEGER PRIMARY KEY CHECK (id = 1), head_event_id INTEGER REFERENCES events(id))" sqlite.EXEC
+  "INSERT OR IGNORE INTO session (id, head_event_id) VALUES (1, NULL)" sqlite.EXEC
+;
+
+: LOAD-HEAD
+  "SELECT head_event_id FROM session WHERE id = 1" [ ] sqlite.QUERY-WITH
+  0 NTH .head_event_id JQ@ .history-head !
+;
+
+: RECORD-NOW
+  NOW-MS .now-ms !
+  .now-ms @ .last-action-ms @ - .elapsed-ms !
+  .now-ms @ .last-action-ms !
+  "INSERT INTO events (parent_id, turn, action, outcome, elapsed_ms) VALUES (?, ?, ?, ?, ?)"
+  [ .history-head @ .history-turn @ .history-action @ .history-outcome @ .elapsed-ms @ ]
+  sqlite.EXEC-WITH
+  sqlite.LAST-INSERT-ID .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+;
+
+: RECORD
+  .history-outcome ! .history-turn ! .history-action !
+  .replaying? @ NOT
+  "history.RECORD-NOW"
+  WHEN
+;
+
+# Returns true if no events have been recorded yet.
+: EMPTY?
+  "SELECT count(*) as n FROM events" [ ] sqlite.QUERY-WITH 0 NTH .n JQ@ 0 ==
+;
+
+# The string here is the action name being stored as data (an argument to
+# RECORD), not a call being deferred -- it names ON-HISTORY-RESET, the
+# caller's hook, not one of this module's own words.
+: RECORD-ROOT   "ON-HISTORY-RESET" 0 "ok" RECORD ;
+
+# Call once at startup, after the caller has already run its own reset
+# logic. If history is empty (first-ever run), records that reset as the
+# root event, so every replay -- including from the very start -- can just
+# replay the whole chain uniformly. No-ops otherwise (a later app run,
+# resuming existing history).
+: ENSURE-ROOT
+  EMPTY? "history.RECORD-ROOT" WHEN
+;
+
+# Full startup sequence: creates the schema if needed, loads the current
+# head, resets the module's own per-session state, runs the caller's
+# ON-HISTORY-RESET, and records it as the root event on a first-ever run.
+# Call once, after sqlite.OPEN, before anything else touches history.
+: INITIALIZE
+  SCHEMA
+  LOAD-HEAD
+  NOW-MS .last-action-ms !
+  FALSE .replaying? !
+  "ON-HISTORY-RESET" RUN
+  ENSURE-ROOT
+;
+
+# The action name run here is data read back from the database at runtime
+# (whatever action was originally recorded, e.g. ON-HISTORY-RESET or an
+# app-defined action word) -- never a literal in this file's source, so
+# there's nothing here to prefix.
+: REPLAY-STEP
+  .replay-rows @ .replay-index @ NTH .action JQ@ RUN
+  .replay-index @ 1 + .replay-index !
+;
+
+# Restores to an earlier event and rebuilds state by replaying the action
+# sequence from root to it (via one recursive-CTE query for the whole
+# chain). Recording a new action afterwards forks a new branch from here,
+# since .history-head now points at event-id instead of the old tip.
+: RESTORE-TO
+  .restore-event-id !
+  TRUE .replaying? !
+
+  "WITH RECURSIVE chain(id, parent_id, action) AS ( SELECT id, parent_id, action FROM events WHERE id = ? UNION ALL SELECT e.id, e.parent_id, e.action FROM events e JOIN chain c ON e.id = c.parent_id ) SELECT action FROM chain ORDER BY id ASC"
+  [ .restore-event-id @ ]
+  sqlite.QUERY-WITH
+  .replay-rows !
+
+  0 .replay-index !
+  .replay-rows @ LENGTH "history.REPLAY-STEP" TIMES-RUN
+
+  .restore-event-id @ .history-head !
+  "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
+
+  FALSE .replaying? !
+;
