@@ -1,6 +1,7 @@
 [ .location                      # The currently loaded location: { .name .description .start .grid .features .exits }
   .player-x .player-y            # Player position in the dungeon grid
   .player-facing                 # Current facing: "N" "E" "S" or "W"
+  .try-move-direction            # Handed from TRY-MOVE to APPLY-MOVE; shared across that call
 
   .scan-depth                    # DRAW-VISIBLE-WALLS' scan depth; shared because each TIMES-RUN step is its own call
   .turn-count                    # Number of player actions taken so far (also the event "turn")
@@ -9,8 +10,8 @@
   .log-index                     # Handed from DRAW-LOG-ROW-STEP to DRAW-LOG-ENTRY; shared across that call
 
   .party                         # Array of party member records: { .name .hp .max-hp }
-  .party-index                   # Which party member is being drawn; shared, same reason as .scan-depth
-  .hp-ratio                      # Handed from DRAW-PARTY-MEMBER-STEP to HP-BAR-COLOR; shared across that call
+  .party-index .party-member     # Handed from DRAW-MEMBER-STEP to PARTY-MEMBER-X/PARTY-MEMBER-LABEL; shared across that call
+  .hp-ratio                      # Handed from DRAW-MEMBER-STEP to HP-BAR-COLOR; shared across that call
   ] VARIABLES
 
 
@@ -66,9 +67,7 @@
 : NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@;
 
 # Debug helper: prints "x y facing" state to stdout whenever it's called.
-: PRINT-STATE
-  .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT
-;
+: PRINT-STATE   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT;
 
 : NEXT-TURN   .turn-count @ 1 + .turn-count !;
 
@@ -80,32 +79,32 @@
   log.APPEND
 ;
 
-: TURN-RIGHT   NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" history.RECORD;
-: TURN-LEFT   NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" history.RECORD;
-
+: TURN-RIGHT         NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" history.RECORD;
+: TURN-LEFT          NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" history.RECORD;
 : CANT-GO-THAT-WAY   "\"You can't go that way.\" LOG-MESSAGE";
 
-: TRY-MOVE-FORWARD
-  NEXT-TURN
-  .location @ .grid JQ@ .player-x @ FACING-DX + .player-y @ FACING-DY + dungeon.IS-WALL?
-  DUP .move-blocked !
-  NOT
-  ".player-x @ FACING-DX + .player-x ! .player-y @ FACING-DY + .player-y ! PRINT-STATE "
-  CANT-GO-THAT-WAY
-  IF-RUN
-  "TRY-MOVE-FORWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
+: APPLY-MOVE
+  .player-x @ FACING-DX .try-move-direction @ * + .player-x !
+  .player-y @ FACING-DY .try-move-direction @ * + .player-y !
+  PRINT-STATE
 ;
 
-: TRY-MOVE-BACKWARD
+: TRY-MOVE
+  .try-move-action ! .try-move-direction !
   NEXT-TURN
-  .location @ .grid JQ@ .player-x @ FACING-DX - .player-y @ FACING-DY - dungeon.IS-WALL?
-  DUP .move-blocked !
-  NOT
-  ".player-x @ FACING-DX - .player-x ! .player-y @ FACING-DY - .player-y ! PRINT-STATE "
+  .location @ .grid JQ@
+  .player-x @ FACING-DX .try-move-direction @ * +
+  .player-y @ FACING-DY .try-move-direction @ * +
+  dungeon.IS-WALL?
+  .move-blocked !@
   CANT-GO-THAT-WAY
+  "APPLY-MOVE"
   IF-RUN
-  "TRY-MOVE-BACKWARD" .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
+  .try-move-action @ .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
 ;
+
+: TRY-MOVE-FORWARD     1 "TRY-MOVE-FORWARD" TRY-MOVE;
+: TRY-MOVE-BACKWARD   -1 "TRY-MOVE-BACKWARD" TRY-MOVE;
 
 : DRAW-WALL-AT
   .wall-y ! .wall-x !
@@ -179,15 +178,12 @@
   LOG-VISIBLE-COUNT "DRAW-LOG-ROW-STEP" TIMES-RUN
 ;
 
-# Party status bar: a strip across the top (the message log owns the
-# bottom), name + HP text + a color-coded HP bar per member. Condition is
-# derived from the hp/max-hp ratio rather than stored, so it can't drift
-# out of sync with the actual numbers.
-: PARTY-COUNT   .party @ LENGTH;
-: PARTY-COLUMN-WIDTH   800 PARTY-COUNT /;
+# Party status bar: a strip across the top (the message log owns the bottom), name + HP text + a color-coded HP bar per member
+: PARTY-COUNT           .party @ LENGTH;
+: PARTY-COLUMN-WIDTH    800 PARTY-COUNT /;
 : PARTY-COLUMN-MARGIN   10;
-: PARTY-MEMBER-X   .party-index @ 1 - PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN +;
-: PARTY-BAR-WIDTH   PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * -;
+: PARTY-MEMBER-X        .party-index @ PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN +;
+: PARTY-BAR-WIDTH       PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * -;
 
 # Key values here are strings, not dot-symbols: a dot-symbol immediately
 # followed by another dot-symbol is parsed as a bare boolean flag, not a
@@ -201,62 +197,79 @@
 : HP-COLORS
   { .low    { .r 200 .g 40  .b 40  .a 255 }
     .medium { .r 220 .g 200 .b 40  .a 255 }
-    .high   { .r 60  .g 200 .b 60  .a 255 } }
+    .high   { .r 60  .g 200 .b 60  .a 255 }
+  }
 ;
 
-: HP-BAR-COLOR
-  HP-COLORS
-  .hp-ratio @ HP-BREAKPOINTS "high" BUCKET
-  JQ@
-;
+: HP-BAR-COLOR   HP-COLORS .hp-ratio @ HP-BREAKPOINTS "high" BUCKET JQ@; 
 
-: DRAW-PARTY-MEMBER-STEP
-  .party-index @ 1 + .party-index !
-  .party @ .party-index @ 1 - NTH .party-member !
-  .party-member @ .hp JQ@ .party-member @ .max-hp JQ@ / .hp-ratio !
-
+: DRAW-MEMBER-HP-BACKGROUND
   { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .height 12
     .color { .r 60 .g 60 .b 60 .a 255 } }
   raylib.DRAW-RECTANGLE
+;
 
+: DRAW-MEMBER-HP-FILL
   { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .hp-ratio @ * .height 12
     .color HP-BAR-COLOR }
   raylib.DRAW-RECTANGLE
+;
 
-  { .text [ .party-member @ .name JQ@ " " .party-member @ .hp JQ@ >STR "/" .party-member @ .max-hp JQ@ >STR ] CONCAT
+: PARTY-MEMBER-LABEL
+  [ .party-member @ .name JQ@ " " .party-member @ .hp JQ@ >STR "/" .party-member @ .max-hp JQ@ >STR ] CONCAT
+;
+
+: DRAW-MEMBER-LABEL
+  { .text PARTY-MEMBER-LABEL
     .posX PARTY-MEMBER-X .posY 8 .fontSize FONT-SIZE
     .color { .r 255 .g 255 .b 255 .a 255 } }
   raylib.DRAW-TEXT
 ;
 
+# ( index item -- )
+: DRAW-MEMBER-STEP   ( .party-member ! .party-index ! )
+  .party-member @ .hp JQ@ .party-member @ .max-hp JQ@ / .hp-ratio !
+  DRAW-MEMBER-HP-BACKGROUND
+  DRAW-MEMBER-HP-FILL
+  DRAW-MEMBER-LABEL
+;
+
 : DRAW-PARTY-BAR
   { .x 0 .y 0 .width 800 .height 64 .color { .r 20 .g 20 .b 30 .a 220 } } raylib.DRAW-RECTANGLE
-  0 .party-index !
-  PARTY-COUNT "DRAW-PARTY-MEMBER-STEP" TIMES-RUN
+  .party @ "DRAW-MEMBER-STEP" { .with_key TRUE } ~> FOREACH
 ;
 
-: ON-DRAW-FRAME
-  "W" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
-  "UP" raylib.IS-KEY-PRESSED "TRY-MOVE-FORWARD" WHEN
-  "S" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
-  "DOWN" raylib.IS-KEY-PRESSED "TRY-MOVE-BACKWARD" WHEN
-  "A" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
-  "LEFT" raylib.IS-KEY-PRESSED "TURN-LEFT" WHEN
-  "D" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
-  "RIGHT" raylib.IS-KEY-PRESSED "TURN-RIGHT" WHEN
+# ( key action -- )
+: ON-KEY
+  .on-key-action ! .on-key-key !
+  .on-key-key @ raylib.IS-KEY-PRESSED
+  .on-key-action @
+  WHEN
+;
 
+: HANDLE-INPUT
+  "W" "TRY-MOVE-FORWARD" ON-KEY
+  "UP" "TRY-MOVE-FORWARD" ON-KEY
+  "S" "TRY-MOVE-BACKWARD" ON-KEY
+  "DOWN" "TRY-MOVE-BACKWARD" ON-KEY
+  "A" "TURN-LEFT" ON-KEY
+  "LEFT" "TURN-LEFT" ON-KEY
+  "D" "TURN-RIGHT" ON-KEY
+  "RIGHT" "TURN-RIGHT" ON-KEY
+;
+
+: DRAW-FRAME
   raylib.BEGIN-DRAWING
-  { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
-
-  { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
-  { .slices 20 .spacing 1 } raylib.DRAW-GRID
-
-  DRAW-VISIBLE-WALLS
-
-  raylib.END-MODE-3D
-
-  DRAW-PARTY-BAR
-  DRAW-MESSAGE-LOG
-
+     { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
+     # 3D mode
+     { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
+        { .slices 20 .spacing 1 } raylib.DRAW-GRID
+        DRAW-VISIBLE-WALLS
+     raylib.END-MODE-3D
+     # Draw overlays
+     DRAW-PARTY-BAR
+     DRAW-MESSAGE-LOG
   raylib.END-DRAWING
 ;
+
+: ON-DRAW-FRAME   HANDLE-INPUT DRAW-FRAME;

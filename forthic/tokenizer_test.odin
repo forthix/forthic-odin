@@ -409,6 +409,26 @@ test_triple_quote_backward_compatibility :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_parens_and_comma_are_whitespace :: proc(t: ^testing.T) {
+  with_parens := tokenize_all("( .a ! .b ! )")
+  defer delete_tokens(with_parens)
+  bare := tokenize_all(".a ! .b !")
+  defer delete_tokens(bare)
+
+  testing.expect_value(t, len(with_parens), len(bare))
+  for token, i in with_parens {
+    testing.expect_value(t, token.token_type, bare[i].token_type)
+    testing.expect_value(t, token.text, bare[i].text)
+  }
+
+  with_comma := tokenize_all("DUP, SWAP")
+  defer delete_tokens(with_comma)
+  testing.expect_value(t, len(with_comma), 2)
+  testing.expect_value(t, with_comma[0].text, "DUP")
+  testing.expect_value(t, with_comma[1].text, "SWAP")
+}
+
+@(test)
 test_unterminated_string :: proc(t: ^testing.T) {
   tokenizer := make_tokenizer("\"unterminated")
   defer tokenizer_destroy(&tokenizer)
