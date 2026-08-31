@@ -35,6 +35,13 @@ main :: proc() {
   }
   forthic.interpreter_register_and_import_module(&ui_interp, message_log_module, "message-log")
 
+  status_bar_module, status_bar_err := forthic.module_create_from_forthic_file(&ui_interp, "status-bar", "modules/raylib/lib/status-bar.forthic")
+  if status_bar_err != nil {
+    fmt.println(status_bar_err)
+    os.exit(1)
+  }
+  forthic.interpreter_register_and_import_module(&ui_interp, status_bar_module, "status-bar")
+
   sqlite_module := sqlite_forthic.sqlite_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, sqlite_module, "sqlite")
 
@@ -62,6 +69,9 @@ main :: proc() {
 
   message_log_mirror_module := forthic.module_mirror(message_log_module, &ui_interp, "message-log", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, message_log_mirror_module, "message-log")
+
+  status_bar_mirror_module := forthic.module_mirror(status_bar_module, &ui_interp, "status-bar", &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, status_bar_mirror_module, "status-bar")
 
   sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, "sqlite", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, sqlite_mirror_module, "sqlite")

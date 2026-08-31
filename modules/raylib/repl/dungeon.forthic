@@ -7,8 +7,6 @@
   .turn-count                    # Number of player actions taken so far (also the event "turn")
 
   .party                         # Array of party member records: { .name .hp .max-hp }
-  .party-index .party-member     # Handed from DRAW-MEMBER-STEP to PARTY-MEMBER-X/PARTY-MEMBER-LABEL; shared across that call
-  .hp-ratio                      # Handed from DRAW-MEMBER-STEP to HP-BAR-COLOR; shared across that call
   ] VARIABLES
 
 
@@ -41,6 +39,7 @@
   "/System/Library/Fonts/SFNSMono.ttf" FONT-SIZE raylib.LOAD-FONT
   "modules/raylib/repl/locations/goblin-warren/location.forthic" LOAD-OBJECT .location !
   0 470 800 130 5 message-log.INITIALIZE
+  0 0 800 64 status-bar.INITIALIZE
   "dungeon_history.db" sqlite.OPEN
   history.INITIALIZE
 ;
@@ -132,65 +131,13 @@
 ;
 
 # Party status bar: a strip across the top (the message log owns the bottom), name + HP text + a color-coded HP bar per member
-: PARTY-COUNT           .party @ LENGTH;
-: PARTY-COLUMN-WIDTH    800 PARTY-COUNT /;
-: PARTY-COLUMN-MARGIN   10;
-: PARTY-MEMBER-X        .party-index @ PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN +;
-: PARTY-BAR-WIDTH       PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * -;
-
-# Key values here are strings, not dot-symbols: a dot-symbol immediately
-# followed by another dot-symbol is parsed as a bare boolean flag, not a
-# key/value pair (see collection_words.odin), so { .key "low" } needs a
-# string even though .low would read more naturally.
-: HP-BREAKPOINTS
-  [ { .below 0   .key "low" }
-    { .below 0.5 .key "medium" } ]
+# ( party-member -- status-item )
+: PARTY-STATUS-ITEM   ( .status-member ! )
+  { .ratio .status-member @ .hp JQ@ .status-member @ .max-hp JQ@ /
+    .label [ .status-member @ .name JQ@ " " .status-member @ .hp JQ@ >STR "/" .status-member @ .max-hp JQ@ >STR ] CONCAT }
 ;
 
-: HP-COLORS
-  { .low    { .r 200 .g 40  .b 40  .a 255 }
-    .medium { .r 220 .g 200 .b 40  .a 255 }
-    .high   { .r 60  .g 200 .b 60  .a 255 }
-  }
-;
-
-: HP-BAR-COLOR   HP-COLORS .hp-ratio @ HP-BREAKPOINTS "high" BUCKET JQ@; 
-
-: DRAW-MEMBER-HP-BACKGROUND
-  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .height 12
-    .color { .r 60 .g 60 .b 60 .a 255 } }
-  raylib.DRAW-RECTANGLE
-;
-
-: DRAW-MEMBER-HP-FILL
-  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .hp-ratio @ * .height 12
-    .color HP-BAR-COLOR }
-  raylib.DRAW-RECTANGLE
-;
-
-: PARTY-MEMBER-LABEL
-  [ .party-member @ .name JQ@ " " .party-member @ .hp JQ@ >STR "/" .party-member @ .max-hp JQ@ >STR ] CONCAT
-;
-
-: DRAW-MEMBER-LABEL
-  { .text PARTY-MEMBER-LABEL
-    .posX PARTY-MEMBER-X .posY 8 .fontSize FONT-SIZE
-    .color { .r 255 .g 255 .b 255 .a 255 } }
-  raylib.DRAW-TEXT
-;
-
-# ( index item -- )
-: DRAW-MEMBER-STEP   ( .party-member ! .party-index ! )
-  .party-member @ .hp JQ@ .party-member @ .max-hp JQ@ / .hp-ratio !
-  DRAW-MEMBER-HP-BACKGROUND
-  DRAW-MEMBER-HP-FILL
-  DRAW-MEMBER-LABEL
-;
-
-: DRAW-PARTY-BAR
-  { .x 0 .y 0 .width 800 .height 64 .color { .r 20 .g 20 .b 30 .a 220 } } raylib.DRAW-RECTANGLE
-  .party @ "DRAW-MEMBER-STEP" { .with_key TRUE } ~> FOREACH
-;
+: DRAW-PARTY-BAR   .party @ "PARTY-STATUS-ITEM" MAP status-bar.DRAW;
 
 # ( key action -- )
 : ON-KEY

@@ -1,0 +1,79 @@
+# A horizontal status bar: N items in a row, each showing a colored
+# ratio-bar (red/yellow/green by value) and a text label. Reusable by any
+# raylib-based Forthic app for any 0..1 ratio -- HP, mana, loading
+# progress, etc. Each item passed to DRAW must be a record shaped
+# { .ratio 0..1 .label "..." } -- the caller maps its own domain objects
+# into that shape (e.g. via MAP) before calling DRAW.
+#
+# Registered as a fixed-prefix module (see modules/raylib/repl/main.odin),
+# same as history/message-log/raylib/log/dungeon -- always accessed as
+# status-bar.WORD. Call status-bar.INITIALIZE once at startup, before
+# status-bar.DRAW.
+
+[ .box-x .box-y .box-width .box-height   # Background box position/size, set by INITIALIZE
+  .items                                  # The array currently being drawn, set by DRAW
+  .column-index .item                     # DRAW-ITEM-STEP's loop state, handed to COLUMN-X/DRAW-ITEM-LABEL; shared across those calls
+  .ratio                                  # Handed from DRAW-ITEM-STEP to BAR-COLOR; shared across that call
+  ] VARIABLES
+
+: COLUMN-COUNT    .items @ LENGTH;
+: COLUMN-WIDTH    .box-width @ COLUMN-COUNT /;
+: COLUMN-MARGIN   10;
+: COLUMN-X        .column-index @ COLUMN-WIDTH * COLUMN-MARGIN + .box-x @ +;
+: BAR-WIDTH       COLUMN-WIDTH COLUMN-MARGIN 2 * -;
+
+# ( x y width height -- )
+: INITIALIZE   ( .box-height ! .box-width ! .box-y ! .box-x ! )
+;
+
+# Key values here are strings, not dot-symbols: a dot-symbol immediately
+# followed by another dot-symbol is parsed as a bare boolean flag, not a
+# key/value pair (see collection_words.odin), so { .key "low" } needs a
+# string even though .low would read more naturally.
+: BREAKPOINTS
+  [ { .below 0   .key "low" }
+    { .below 0.5 .key "medium" } ]
+;
+
+: COLORS
+  { .low    { .r 200 .g 40  .b 40  .a 255 }
+    .medium { .r 220 .g 200 .b 40  .a 255 }
+    .high   { .r 60  .g 200 .b 60  .a 255 }
+  }
+;
+
+: BAR-COLOR   COLORS .ratio @ BREAKPOINTS "high" BUCKET JQ@;
+
+: DRAW-ITEM-BACKGROUND
+  { .x COLUMN-X .y .box-y @ 34 + .width BAR-WIDTH .height 12
+    .color { .r 60 .g 60 .b 60 .a 255 } }
+  raylib.DRAW-RECTANGLE
+;
+
+: DRAW-ITEM-FILL
+  { .x COLUMN-X .y .box-y @ 34 + .width BAR-WIDTH .ratio @ * .height 12
+    .color BAR-COLOR }
+  raylib.DRAW-RECTANGLE
+;
+
+: DRAW-ITEM-LABEL
+  { .text .item @ .label JQ@
+    .posX COLUMN-X .posY .box-y @ 8 + .fontSize 16
+    .color { .r 255 .g 255 .b 255 .a 255 } }
+  raylib.DRAW-TEXT
+;
+
+# ( index item -- )
+: DRAW-ITEM-STEP   ( .item ! .column-index ! )
+  .item @ .ratio JQ@ .ratio !
+  DRAW-ITEM-BACKGROUND
+  DRAW-ITEM-FILL
+  DRAW-ITEM-LABEL
+;
+
+# ( items:array -- )
+: DRAW
+  .items !
+  { .x .box-x @ .y .box-y @ .width .box-width @ .height .box-height @ .color { .r 20 .g 20 .b 30 .a 220 } } raylib.DRAW-RECTANGLE
+  .items @ "status-bar.DRAW-ITEM-STEP" { .with_key TRUE } ~> FOREACH
+;
