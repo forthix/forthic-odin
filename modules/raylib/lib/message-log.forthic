@@ -1,0 +1,68 @@
+# A scrolling, two-column on-screen message log. Storage is the generic log
+# module (log.APPEND/COUNT/LINE/CLEAR); this module owns the visible-window
+# logic and rendering. Reusable by any raylib-based Forthic app -- the
+# caller decides what the two columns mean (e.g. "Turn 5" + message text),
+# this module just stores and draws whatever (label, text) pairs it's given.
+#
+# Registered as a fixed-prefix module (see modules/raylib/repl/main.odin),
+# same as history/raylib/log/dungeon -- always accessed as message-log.WORD.
+# Call message-log.INITIALIZE once at startup, before message-log.DRAW.
+
+[ .box-x .box-y .box-width .box-height   # Background box position/size, set by INITIALIZE
+  .visible-count                          # How many rows to show at once, set by INITIALIZE
+  .row .index                             # DRAW-ROW-STEP's loop counter, handed to DRAW-ENTRY; shared across that call
+  ] VARIABLES
+
+: ROW-SPACING   20;
+: TOP-PADDING   10;
+
+# ( x y width height visible-count -- )
+: INITIALIZE   ( .visible-count ! .box-height ! .box-width ! .box-y ! .box-x ! )
+;
+
+# ( label:string text:string -- )
+: RECORD   ( .record-text ! .record-label ! )
+  { .label .record-label @ .text .record-text @ } log.APPEND
+;
+
+# First absolute log.LINE index to show, so the visible window is always
+# the most recent .visible-count entries (or fewer, early on).
+: WINDOW-START
+  log.COUNT .visible-count @ <
+  0
+  log.COUNT .visible-count @ -
+  IF
+;
+
+: ROW-Y   .row @ 1 - ROW-SPACING * .box-y @ TOP-PADDING + +;
+
+: DRAW-ENTRY
+  .index @ log.LINE .entry !
+
+  { .text .entry @ .label JQ@
+    .posX .box-x @ 10 +
+    .posY ROW-Y
+    .fontSize 16
+    .color { .r 150 .g 150 .b 170 .a 255 } }
+  raylib.DRAW-TEXT
+
+  { .text .entry @ .text JQ@
+    .posX .box-x @ 100 +
+    .posY ROW-Y
+    .fontSize 16
+    .color { .r 255 .g 255 .b 255 .a 255 } }
+  raylib.DRAW-TEXT
+;
+
+: DRAW-ROW-STEP
+  .row @ 1 + .row !
+  .row @ 1 - WINDOW-START + .index !
+  .index @ log.COUNT <
+  "message-log.DRAW-ENTRY" WHEN
+;
+
+: DRAW
+  { .x .box-x @ .y .box-y @ .width .box-width @ .height .box-height @ .color { .r 0 .g 0 .b 0 .a 150 } } raylib.DRAW-RECTANGLE
+  0 .row !
+  .visible-count @ "message-log.DRAW-ROW-STEP" TIMES-RUN
+;

@@ -28,6 +28,13 @@ main :: proc() {
   log_module := log_forthic.log_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, log_module, "log")
 
+  message_log_module, message_log_err := forthic.module_create_from_forthic_file(&ui_interp, "message-log", "modules/raylib/lib/message-log.forthic")
+  if message_log_err != nil {
+    fmt.println(message_log_err)
+    os.exit(1)
+  }
+  forthic.interpreter_register_and_import_module(&ui_interp, message_log_module, "message-log")
+
   sqlite_module := sqlite_forthic.sqlite_module_create()
   forthic.interpreter_register_and_import_module(&ui_interp, sqlite_module, "sqlite")
 
@@ -52,6 +59,9 @@ main :: proc() {
 
   log_mirror_module := forthic.module_mirror(log_module, &ui_interp, "log", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, log_mirror_module, "log")
+
+  message_log_mirror_module := forthic.module_mirror(message_log_module, &ui_interp, "message-log", &queue)
+  forthic.interpreter_register_and_import_module(&repl_interp, message_log_mirror_module, "message-log")
 
   sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, "sqlite", &queue)
   forthic.interpreter_register_and_import_module(&repl_interp, sqlite_mirror_module, "sqlite")
