@@ -1,0 +1,99 @@
+# Player position, facing, and turn counter, plus the WASD/arrow-key
+# bindings that drive them. Registered as a fixed-prefix module (see
+# modules/raylib/repl/main.odin) -- always accessed as movement.WORD.
+# Needs raylib/dungeon/message-log/history already registered before this
+# module is loaded, since it calls raylib.IS-KEY-PRESSED, dungeon.IS-WALL?,
+# message-log.RECORD, and history.SAVE.
+#
+# A dynamically-dispatched self-reference (a word name run later via
+# WHEN/IF-RUN/TIMES-RUN rather than called directly) has to spell out this
+# module's own "movement." prefix, since it's looked up fresh at run time
+# against the app's flattened word table -- unlike a direct call, which is
+# resolved once, at compile time, to whichever word this file itself
+# defined.
+
+[ .player-x .player-y .player-facing   # Current position/facing, set by RESET
+  .turn-count                          # Number of player actions taken so far (also the event "turn")
+  .grid                                # Current location's grid, set by RESET; used by TRY-MOVE's wall test
+  .try-move-direction                  # Handed from TRY-MOVE to APPLY-MOVE; shared across that nested call
+  ] VARIABLES
+
+# ( { .x .y .facing .grid } -- )
+: RESET   ( .reset-config ! )
+  .reset-config @ .x JQ@ .player-x !
+  .reset-config @ .y JQ@ .player-y !
+  .reset-config @ .facing JQ@ .player-facing !
+  .reset-config @ .grid JQ@ .grid !
+  0 .turn-count !
+;
+
+: PLAYER-X   .player-x @;
+: PLAYER-Y   .player-y @;
+
+: FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@;
+: FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@;
+
+: LEFT-DX     FACING-DY;
+: LEFT-DY     0 FACING-DX -;
+
+# Record values here are strings, not dot-symbols: a dot-symbol immediately
+# followed by another dot-symbol is parsed as a bare boolean flag, not a
+# key/value pair (see collection_words.odin), so back-to-back dot-symbols
+# would silently fail to build the mapping we want.
+: NEXT-FACING-CW    { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@;
+: NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@;
+
+# Debug helper: prints "x y facing" state to stdout whenever it's called.
+: PRINT-STATE   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT;
+
+: NEXT-TURN   .turn-count @ 1 + .turn-count !;
+
+# "Turn N" formatting is this module's own presentation choice -- the
+# message-log module just takes a pre-formatted (label text) pair.
+: LOG-MESSAGE   ( .log-message-text ! )
+  [ "Turn " .turn-count @ >STR ] CONCAT .log-message-text @ message-log.RECORD
+;
+
+: TURN-RIGHT   NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE { .action "TURN-RIGHT" .turn .turn-count @ .outcome "ok" } history.SAVE;
+: TURN-LEFT    NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE { .action "TURN-LEFT" .turn .turn-count @ .outcome "ok" } history.SAVE;
+: CANT-GO-THAT-WAY   "\"You can't go that way.\" movement.LOG-MESSAGE";
+
+: APPLY-MOVE
+  .player-x @ FACING-DX .try-move-direction @ * + .player-x !
+  .player-y @ FACING-DY .try-move-direction @ * + .player-y !
+  PRINT-STATE
+;
+
+: TRY-MOVE
+  .try-move-action ! .try-move-direction !
+  NEXT-TURN
+  .grid @
+  .player-x @ FACING-DX .try-move-direction @ * +
+  .player-y @ FACING-DY .try-move-direction @ * +
+  dungeon.IS-WALL? .move-blocked !
+  .move-blocked @  CANT-GO-THAT-WAY "movement.APPLY-MOVE" IF-RUN
+  .move-blocked @  "blocked" "ok" IF .try-move-outcome !
+  { .action .try-move-action @ .turn .turn-count @ .outcome .try-move-outcome @ } history.SAVE
+;
+
+: TRY-MOVE-FORWARD     1 "TRY-MOVE-FORWARD" TRY-MOVE;
+: TRY-MOVE-BACKWARD   -1 "TRY-MOVE-BACKWARD" TRY-MOVE;
+
+# ( key action -- )
+: ON-KEY
+  .on-key-action ! .on-key-key !
+  .on-key-key @ raylib.IS-KEY-PRESSED
+  .on-key-action @
+  WHEN
+;
+
+: HANDLE-INPUT
+  "W" "movement.TRY-MOVE-FORWARD" ON-KEY
+  "UP" "movement.TRY-MOVE-FORWARD" ON-KEY
+  "S" "movement.TRY-MOVE-BACKWARD" ON-KEY
+  "DOWN" "movement.TRY-MOVE-BACKWARD" ON-KEY
+  "A" "movement.TURN-LEFT" ON-KEY
+  "LEFT" "movement.TURN-LEFT" ON-KEY
+  "D" "movement.TURN-RIGHT" ON-KEY
+  "RIGHT" "movement.TURN-RIGHT" ON-KEY
+;

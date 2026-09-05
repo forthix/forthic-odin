@@ -1,0 +1,59 @@
+# Draws the corridor ahead of a viewer as wall cubes, via a forward
+# raycast scan: for each depth step out to MAX-SCAN-DEPTH, draws straight
+# ahead plus immediate left/right flanking walls, testing a grid with
+# dungeon.IS-WALL?. Registered as a fixed-prefix module (see
+# modules/raylib/repl/main.odin) -- always accessed as corridor-view.WORD.
+# Needs raylib/dungeon already registered before this module is loaded.
+#
+# DRAW takes a view record so this module holds no caller state itself:
+# { .grid .x .y .facing-dx .facing-dy .left-dx .left-dy }
+
+[ .view          # DRAW's incoming view record, set once per call; read on demand by GRID/VIEW-X/etc below
+  .scan-depth    # SCAN-DEPTH-STEP's depth counter; shared because each TIMES-RUN step is its own call
+  ] VARIABLES
+
+: MAX-SCAN-DEPTH   7;
+
+: GRID        .view @ .grid JQ@;
+: VIEW-X      .view @ .x JQ@;
+: VIEW-Y      .view @ .y JQ@;
+: FACING-DX   .view @ .facing-dx JQ@;
+: FACING-DY   .view @ .facing-dy JQ@;
+: LEFT-DX     .view @ .left-dx JQ@;
+: LEFT-DY     .view @ .left-dy JQ@;
+
+# depth: how many cells ahead (along facing). lat: how many cells to the
+# left (negative = right). Converts that offset into a grid coordinate.
+# ( depth lat -- target-x )
+: TARGET-X   ( .tx-lat ! .tx-depth ! )
+  VIEW-X .tx-depth @ FACING-DX * + .tx-lat @ LEFT-DX * +
+;
+
+# ( depth lat -- target-y )
+: TARGET-Y   ( .ty-lat ! .ty-depth ! )
+  VIEW-Y .ty-depth @ FACING-DY * + .ty-lat @ LEFT-DY * +
+;
+
+: DRAW-WALL-AT (.wall-y ! .wall-x !)
+    GRID .wall-x @ .wall-y @ dungeon.IS-WALL?
+    "{ .x .wall-x @ 0.5 + .y 0.5 .z .wall-y @ 0.5 + .width 1 .height 1 .length 1 .color { .r 120 .g 120 .b 130 .a 255 } } raylib.DRAW-CUBE"
+    WHEN
+;
+
+# Draws wall cube at offset depth (num cells ahead) and lat (num cells to the left)
+: DRAW-WALL-AHEAD (.lat ! .depth !) .depth @ .lat @ TARGET-X .depth @ .lat @ TARGET-Y DRAW-WALL-AT;
+
+# One step of the forward scan: advances .scan-depth and draws straight
+# ahead plus immediate left/right flanking, at that depth.
+: SCAN-DEPTH-STEP
+  .scan-depth @ 1 + .scan-depth !
+  .scan-depth @ 0  DRAW-WALL-AHEAD
+  .scan-depth @ 1  DRAW-WALL-AHEAD
+  .scan-depth @ -1 DRAW-WALL-AHEAD
+;
+
+# ( { .grid .x .y .facing-dx .facing-dy .left-dx .left-dy } -- )
+: DRAW   ( .view ! )
+    0 .scan-depth !
+    MAX-SCAN-DEPTH "corridor-view.SCAN-DEPTH-STEP" TIMES-RUN
+;
