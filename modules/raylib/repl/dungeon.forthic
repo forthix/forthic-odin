@@ -39,7 +39,7 @@
   "/System/Library/Fonts/SFNSMono.ttf" FONT-SIZE raylib.LOAD-FONT
   "modules/raylib/repl/locations/goblin-warren/location.forthic" LOAD-OBJECT .location !
   { .x 0 .y 470 .width 800 .height 130 .visible-count 5 } message-log.INITIALIZE
-  0 0 800 64 status-bar.INITIALIZE
+  { .x 0 .y 0 .width 800 .height 64 } status-bar.INITIALIZE
   "dungeon_history.db" sqlite.OPEN
   history.INITIALIZE
 ;

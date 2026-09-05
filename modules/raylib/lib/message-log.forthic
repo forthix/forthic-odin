@@ -8,21 +8,21 @@
 # same as history/raylib/log/dungeon -- always accessed as message-log.WORD.
 # Call message-log.INITIALIZE once at startup, before message-log.DRAW.
 
-[ .config                                  # Box position/size/visible-count, set by INITIALIZE; read on demand by BOX-X/BOX-Y/etc below
+[ .message-log-config                    # Box position/size/visible-count, set by INITIALIZE; read on demand by BOX-X/BOX-Y/etc below
   .row .index                             # DRAW-ROW-STEP's loop counter, handed to DRAW-ENTRY; shared across that call
   ] VARIABLES
 
-: BOX-X           .config @ .x JQ@;
-: BOX-Y           .config @ .y JQ@;
-: BOX-WIDTH       .config @ .width JQ@;
-: BOX-HEIGHT      .config @ .height JQ@;
-: VISIBLE-COUNT   .config @ .visible-count JQ@;
+: BOX-X           .message-log-config @ .x JQ@;
+: BOX-Y           .message-log-config @ .y JQ@;
+: BOX-WIDTH       .message-log-config @ .width JQ@;
+: BOX-HEIGHT      .message-log-config @ .height JQ@;
+: VISIBLE-COUNT   .message-log-config @ .visible-count JQ@;
 
 : ROW-SPACING   20;
 : TOP-PADDING   10;
 
 # ( { .x .y .width .height .visible-count } -- )
-: INITIALIZE   ( .config ! ) ;
+: INITIALIZE   ( .message-log-config ! ) ;
 
 # ( label:string text:string -- )
 : RECORD   ( .record-text ! .record-label ! )
