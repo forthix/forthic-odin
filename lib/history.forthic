@@ -20,7 +20,7 @@
 
 [ .history-head                  # Current event id at the tip of history (nil before any action)
   .last-action-ms                # Timestamp of the previous recorded action, for elapsed_ms
-  .history-action .history-turn  # Handed from RECORD to RECORD-NOW; shared across that call
+  .history-action .history-turn  # Handed from SAVE to RECORD-NOW; shared across that call
   .history-outcome               #
   .replaying?                    # True while RESTORE-TO is replaying (suppresses re-recording)
   .replay-rows .replay-index     # Replay loop state for REPLAY-STEP; shared, same reason as a TIMES-RUN loop counter
@@ -48,11 +48,12 @@
   "UPDATE session SET head_event_id = ?" [ .history-head @ ] sqlite.EXEC-WITH
 ;
 
-: RECORD
-  .history-outcome ! .history-turn ! .history-action !
-  .replaying? @ NOT
-  "history.RECORD-NOW"
-  WHEN
+# ( { .action .turn .outcome } -- )
+: SAVE   ( .save-config ! )
+  .save-config @ .action JQ@ .history-action !
+  .save-config @ .turn JQ@ .history-turn !
+  .save-config @ .outcome JQ@ .history-outcome !
+  .replaying? @ NOT "history.RECORD-NOW" WHEN
 ;
 
 # Returns true if no events have been recorded yet.
@@ -61,9 +62,9 @@
 ;
 
 # The string here is the action name being stored as data (an argument to
-# RECORD), not a call being deferred -- it names ON-HISTORY-RESET, the
+# SAVE), not a call being deferred -- it names ON-HISTORY-RESET, the
 # caller's hook, not one of this module's own words.
-: RECORD-ROOT   "ON-HISTORY-RESET" 0 "ok" RECORD ;
+: RECORD-ROOT   { .action "ON-HISTORY-RESET" .turn 0 .outcome "ok" } SAVE ;
 
 # Call once at startup, after the caller has already run its own reset
 # logic. If history is empty (first-ever run), records that reset as the

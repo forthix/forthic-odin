@@ -1,275 +1,89 @@
-[ .location                      # The currently loaded location: { .name .description .start .grid .features .exits }
-  .player-x .player-y            # Player position in the dungeon grid
-  .player-facing                 # Current facing: "N" "E" "S" or "W"
-  .try-move-direction            # Handed from TRY-MOVE to APPLY-MOVE; shared across that call
-
-  .scan-depth                    # DRAW-VISIBLE-WALLS' scan depth; shared because each TIMES-RUN step is its own call
-  .turn-count                    # Number of player actions taken so far (also the event "turn")
-
-  .log-row                       # Which on-screen log row is being drawn; shared, same reason as .scan-depth
-  .log-index                     # Handed from DRAW-LOG-ROW-STEP to DRAW-LOG-ENTRY; shared across that call
-
-  .party                         # Array of party member records: { .name .hp .max-hp }
-  .party-index .party-member     # Handed from DRAW-MEMBER-STEP to PARTY-MEMBER-X/PARTY-MEMBER-LABEL; shared across that call
-  .hp-ratio                      # Handed from DRAW-MEMBER-STEP to HP-BAR-COLOR; shared across that call
+[ .location    # The currently loaded location: { .name .description .start .grid .features .exits }
+  .party       # Array of party member records: { .name .hp .max-hp }
   ] VARIABLES
 
-
-: MAX-SCAN-DEPTH      7;
-: LOG-VISIBLE-COUNT   5;
-: FONT-SIZE           16;
+: TITLE   "Forthic Dungeon";
+: WIDTH   800;
+: HEIGHT   600;
+: MESSAGE-HEIGHT   130;
+: STAT-BAR-HEIGHT  64;
+: FONT   "/System/Library/Fonts/SFNSMono.ttf";
+: FONT-SIZE   16;
+: LOCATION   "modules/raylib/repl/locations/goblin-warren/location.forthic";
 
 : INITIAL-PARTY
-  [ { .name "Thorin" .hp 24 .max-hp 24 }
-    { .name "Elara"  .hp 16 .max-hp 18 }
-    { .name "Grimm"  .hp 5  .max-hp 20 }
-    { .name "Vex"    .hp 12 .max-hp 12 }
-  ]
+    [ { .name "Thorin" .hp 24 .max-hp 24 }
+      { .name "Elara"  .hp 16 .max-hp 18 }
+      { .name "Grimm"  .hp 5  .max-hp 20 }
+      { .name "Vex"    .hp 12 .max-hp 12 }
+    ]
 ;
 
 : RESET-GAME-STATE
-  .location @ .start JQ@ .start-pos !
-  .start-pos @ .x JQ@ .player-x !
-  .start-pos @ .y JQ@ .player-y !
-  .start-pos @ .facing JQ@ .player-facing !
-  0 .turn-count !
-  INITIAL-PARTY .party !
+    .location @ .start JQ@ .start-pos !
+    { .x .start-pos @ .x JQ@
+      .y .start-pos @ .y JQ@
+      .facing .start-pos @ .facing JQ@
+      .grid .location @ .grid JQ@
+    } movement.RESET
+    INITIAL-PARTY .party !
 ;
 
 # history module's hook: how history.RESTORE-TO gets back to a clean state before replaying.
 : ON-HISTORY-RESET   RESET-GAME-STATE log.CLEAR;
 
 : ON-INITIALIZE-APP
-  { .width 800 .height 600 .title "Forthic Dungeon" } raylib.INIT-WINDOW
-  60 raylib.SET-TARGET-FPS
-  "/System/Library/Fonts/SFNSMono.ttf" FONT-SIZE raylib.LOAD-FONT
-  "modules/raylib/repl/locations/goblin-warren/location.forthic" LOAD-OBJECT .location !
-  "dungeon_history.db" sqlite.OPEN
-  history.INITIALIZE
+    { .width WIDTH .height HEIGHT .title TITLE } raylib.INIT-WINDOW
+    60 raylib.SET-TARGET-FPS
+    FONT FONT-SIZE raylib.LOAD-FONT
+    LOCATION LOAD-OBJECT .location !
+    { .x 0 .y 470 .width WIDTH .height MESSAGE-HEIGHT .visible-count 5 } message-log.INITIALIZE
+    { .x 0 .y 0 .width WIDTH .height STAT-BAR-HEIGHT } status-bar.INITIALIZE
+    "dungeon_history.db" sqlite.OPEN
+    history.INITIALIZE
 ;
 
-: FACING-DX   { .N 0 .E 1 .S 0 .W -1 } .player-facing @ JQ@;
-: FACING-DY   { .N -1 .E 0 .S 1 .W 0 } .player-facing @ JQ@;
+: CAMERA-X   movement.PLAYER-X 0.5 +;
+: CAMERA-Z   movement.PLAYER-Y 0.5 +;
+: TARGET-X   CAMERA-X movement.FACING-DX +;
+: TARGET-Z   CAMERA-Z movement.FACING-DY +;
 
-: LEFT-DX     FACING-DY;
-: LEFT-DY     0 FACING-DX -;
-
-: CAMERA-X    .player-x @ 0.5 +;
-: CAMERA-Z    .player-y @ 0.5 +;
-: TARGET-X    CAMERA-X FACING-DX +;
-: TARGET-Z    CAMERA-Z FACING-DY +;
-
-# Record values here are strings, not dot-symbols: a dot-symbol immediately
-# followed by another dot-symbol is parsed as a bare boolean flag, not a
-# key/value pair (see collection_words.odin), so back-to-back dot-symbols
-# would silently fail to build the mapping we want.
-: NEXT-FACING-CW   { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@;
-: NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@;
-
-# Debug helper: prints "x y facing" state to stdout whenever it's called.
-: PRINT-STATE   .player-x @ PRINT .player-y @ PRINT .player-facing @ PRINT;
-
-: NEXT-TURN   .turn-count @ 1 + .turn-count !;
-
-# Stores the turn number and message text as separate fields, so the log
-# can render them in separate columns instead of one formatted string.
-: LOG-MESSAGE
-  .log-message-text !
-  { .turn .turn-count @ .text .log-message-text @ }
-  log.APPEND
-;
-
-: TURN-RIGHT         NEXT-TURN NEXT-FACING-CW .player-facing ! PRINT-STATE "TURN-RIGHT" .turn-count @ "ok" history.RECORD;
-: TURN-LEFT          NEXT-TURN NEXT-FACING-CCW .player-facing ! PRINT-STATE "TURN-LEFT" .turn-count @ "ok" history.RECORD;
-: CANT-GO-THAT-WAY   "\"You can't go that way.\" LOG-MESSAGE";
-
-: APPLY-MOVE
-  .player-x @ FACING-DX .try-move-direction @ * + .player-x !
-  .player-y @ FACING-DY .try-move-direction @ * + .player-y !
-  PRINT-STATE
-;
-
-: TRY-MOVE
-  .try-move-action ! .try-move-direction !
-  NEXT-TURN
-  .location @ .grid JQ@
-  .player-x @ FACING-DX .try-move-direction @ * +
-  .player-y @ FACING-DY .try-move-direction @ * +
-  dungeon.IS-WALL?
-  .move-blocked !@
-  CANT-GO-THAT-WAY
-  "APPLY-MOVE"
-  IF-RUN
-  .try-move-action @ .turn-count @ .move-blocked @ "blocked" "ok" IF history.RECORD
-;
-
-: TRY-MOVE-FORWARD     1 "TRY-MOVE-FORWARD" TRY-MOVE;
-: TRY-MOVE-BACKWARD   -1 "TRY-MOVE-BACKWARD" TRY-MOVE;
-
-: DRAW-WALL-AT
-  .wall-y ! .wall-x !
-  .location @ .grid JQ@ .wall-x @ .wall-y @ dungeon.IS-WALL?
-  "{ .x .wall-x @ 0.5 + .y 0.5 .z .wall-y @ 0.5 + .width 1 .height 1 .length 1 .color { .r 120 .g 120 .b 130 .a 255 } } raylib.DRAW-CUBE"
-  WHEN
-;
-
-# depth: how many cells ahead (along facing). lat: how many cells to the
-# left (negative = right). Draws a wall cube at that offset, if there is one.
-: DRAW-WALL-AHEAD
-  .lat ! .depth !
-  .player-x @ .depth @ FACING-DX * + .lat @ LEFT-DX * +
-  .player-y @ .depth @ FACING-DY * + .lat @ LEFT-DY * +
-  DRAW-WALL-AT
-;
-
-# One step of the forward scan: advances .scan-depth and draws straight
-# ahead plus immediate left/right flanking, at that depth.
-: SCAN-DEPTH-STEP
-  .scan-depth @ 1 + .scan-depth !
-  .scan-depth @ 0  DRAW-WALL-AHEAD
-  .scan-depth @ 1  DRAW-WALL-AHEAD
-  .scan-depth @ -1 DRAW-WALL-AHEAD
-;
-
-: DRAW-VISIBLE-WALLS
-  0 .scan-depth !
-  MAX-SCAN-DEPTH "SCAN-DEPTH-STEP" TIMES-RUN
-;
-
-# First absolute log.LINE index to show, so the visible window is always
-# the most recent LOG-VISIBLE-COUNT messages (or fewer, early in a session).
-: LOG-WINDOW-START
-  log.COUNT LOG-VISIBLE-COUNT <
-  0
-  log.COUNT LOG-VISIBLE-COUNT -
-  IF
-;
-
-: LOG-ROW-Y   .log-row @ 1 - 20 * 480 +;
-
-: DRAW-LOG-ENTRY
-  .log-index @ log.LINE .log-entry !
-
-  { .text  [ "Turn " .log-entry @ .turn JQ@ >STR ] CONCAT
-    .posX 10
-    .posY LOG-ROW-Y
-    .fontSize 16
-    .color { .r 150 .g 150 .b 170 .a 255 } }
-  raylib.DRAW-TEXT
-
-  { .text  .log-entry @ .text JQ@
-    .posX 100
-    .posY LOG-ROW-Y
-    .fontSize 16
-    .color { .r 255 .g 255 .b 255 .a 255 } }
-  raylib.DRAW-TEXT
-;
-
-: DRAW-LOG-ROW-STEP
-  .log-row @ 1 + .log-row !
-  .log-row @ 1 - LOG-WINDOW-START + .log-index !
-  .log-index @ log.COUNT <
-  "DRAW-LOG-ENTRY" WHEN
-;
-
-: DRAW-MESSAGE-LOG
-  { .x 0 .y 470 .width 800 .height 130 .color { .r 0 .g 0 .b 0 .a 150 } } raylib.DRAW-RECTANGLE
-  0 .log-row !
-  LOG-VISIBLE-COUNT "DRAW-LOG-ROW-STEP" TIMES-RUN
+# The view corridor-view.DRAW needs to raycast from the player's current
+# position/facing, built fresh each frame so corridor-view holds no state
+# of its own about the player or the location.
+: CORRIDOR-VIEW
+    { .grid .location @ .grid JQ@
+      .x movement.PLAYER-X .y movement.PLAYER-Y
+      .facing-dx movement.FACING-DX .facing-dy movement.FACING-DY
+      .left-dx movement.LEFT-DX .left-dy movement.LEFT-DY
+    }
 ;
 
 # Party status bar: a strip across the top (the message log owns the bottom), name + HP text + a color-coded HP bar per member
-: PARTY-COUNT           .party @ LENGTH;
-: PARTY-COLUMN-WIDTH    800 PARTY-COUNT /;
-: PARTY-COLUMN-MARGIN   10;
-: PARTY-MEMBER-X        .party-index @ PARTY-COLUMN-WIDTH * PARTY-COLUMN-MARGIN +;
-: PARTY-BAR-WIDTH       PARTY-COLUMN-WIDTH PARTY-COLUMN-MARGIN 2 * -;
-
-# Key values here are strings, not dot-symbols: a dot-symbol immediately
-# followed by another dot-symbol is parsed as a bare boolean flag, not a
-# key/value pair (see collection_words.odin), so { .key "low" } needs a
-# string even though .low would read more naturally.
-: HP-BREAKPOINTS
-  [ { .below 0   .key "low" }
-    { .below 0.5 .key "medium" } ]
+# ( party-member -- status-item )
+: PARTY-STATUS-ITEM   ( .status-member ! )
+    { .ratio .status-member @ .hp JQ@ .status-member @ .max-hp JQ@ /
+      .label [ .status-member @ .name JQ@ " " .status-member @ .hp JQ@ >STR "/" .status-member @ .max-hp JQ@ >STR ] CONCAT }
 ;
 
-: HP-COLORS
-  { .low    { .r 200 .g 40  .b 40  .a 255 }
-    .medium { .r 220 .g 200 .b 40  .a 255 }
-    .high   { .r 60  .g 200 .b 60  .a 255 }
-  }
-;
+: DRAW-PARTY-BAR   .party @ "PARTY-STATUS-ITEM" MAP status-bar.DRAW;
 
-: HP-BAR-COLOR   HP-COLORS .hp-ratio @ HP-BREAKPOINTS "high" BUCKET JQ@; 
-
-: DRAW-MEMBER-HP-BACKGROUND
-  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .height 12
-    .color { .r 60 .g 60 .b 60 .a 255 } }
-  raylib.DRAW-RECTANGLE
-;
-
-: DRAW-MEMBER-HP-FILL
-  { .x PARTY-MEMBER-X .y 34 .width PARTY-BAR-WIDTH .hp-ratio @ * .height 12
-    .color HP-BAR-COLOR }
-  raylib.DRAW-RECTANGLE
-;
-
-: PARTY-MEMBER-LABEL
-  [ .party-member @ .name JQ@ " " .party-member @ .hp JQ@ >STR "/" .party-member @ .max-hp JQ@ >STR ] CONCAT
-;
-
-: DRAW-MEMBER-LABEL
-  { .text PARTY-MEMBER-LABEL
-    .posX PARTY-MEMBER-X .posY 8 .fontSize FONT-SIZE
-    .color { .r 255 .g 255 .b 255 .a 255 } }
-  raylib.DRAW-TEXT
-;
-
-# ( index item -- )
-: DRAW-MEMBER-STEP   ( .party-member ! .party-index ! )
-  .party-member @ .hp JQ@ .party-member @ .max-hp JQ@ / .hp-ratio !
-  DRAW-MEMBER-HP-BACKGROUND
-  DRAW-MEMBER-HP-FILL
-  DRAW-MEMBER-LABEL
-;
-
-: DRAW-PARTY-BAR
-  { .x 0 .y 0 .width 800 .height 64 .color { .r 20 .g 20 .b 30 .a 220 } } raylib.DRAW-RECTANGLE
-  .party @ "DRAW-MEMBER-STEP" { .with_key TRUE } ~> FOREACH
-;
-
-# ( key action -- )
-: ON-KEY
-  .on-key-action ! .on-key-key !
-  .on-key-key @ raylib.IS-KEY-PRESSED
-  .on-key-action @
-  WHEN
-;
-
-: HANDLE-INPUT
-  "W" "TRY-MOVE-FORWARD" ON-KEY
-  "UP" "TRY-MOVE-FORWARD" ON-KEY
-  "S" "TRY-MOVE-BACKWARD" ON-KEY
-  "DOWN" "TRY-MOVE-BACKWARD" ON-KEY
-  "A" "TURN-LEFT" ON-KEY
-  "LEFT" "TURN-LEFT" ON-KEY
-  "D" "TURN-RIGHT" ON-KEY
-  "RIGHT" "TURN-RIGHT" ON-KEY
-;
+# Extend with dungeon-specific key bindings (e.g. inventory, spells) via
+# movement.ON-KEY, alongside movement's own WASD/arrow bindings.
+: HANDLE-INPUT   movement.HANDLE-INPUT;
 
 : DRAW-FRAME
-  raylib.BEGIN-DRAWING
-     { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
-     # 3D mode
-     { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
-        { .slices 20 .spacing 1 } raylib.DRAW-GRID
-        DRAW-VISIBLE-WALLS
-     raylib.END-MODE-3D
-     # Draw overlays
-     DRAW-PARTY-BAR
-     DRAW-MESSAGE-LOG
-  raylib.END-DRAWING
+    raylib.BEGIN-DRAWING
+       { .r 10 .g 10 .b 20 .a 255 } raylib.CLEAR-BACKGROUND
+       # 3D mode
+       { .position { .x CAMERA-X .y 0.5 .z CAMERA-Z } .target { .x TARGET-X .y 0.5 .z TARGET-Z } .fovy 60 } raylib.BEGIN-MODE-3D
+          { .slices 20 .spacing 1 } raylib.DRAW-GRID
+          CORRIDOR-VIEW corridor-view.DRAW
+       raylib.END-MODE-3D
+       # Draw overlays
+       DRAW-PARTY-BAR
+       message-log.DRAW
+    raylib.END-DRAWING
 ;
 
 : ON-DRAW-FRAME   HANDLE-INPUT DRAW-FRAME;

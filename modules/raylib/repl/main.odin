@@ -14,78 +14,104 @@ import dungeon_forthic "../../dungeon"
 import log_forthic "../../log"
 import sqlite_forthic "../../sqlite"
 
-main :: proc() {
-  ui_interp: forthic.Interpreter
-  forthic.interpreter_init(&ui_interp)
-  defer forthic.interpreter_destroy(&ui_interp)
-
-  raylib_module := raylib_forthic.raylib_module_create()
-  forthic.interpreter_register_and_import_module(&ui_interp, raylib_module, "raylib")
-
-  dungeon_module := dungeon_forthic.dungeon_module_create()
-  forthic.interpreter_register_and_import_module(&ui_interp, dungeon_module, "dungeon")
-
-  log_module := log_forthic.log_module_create()
-  forthic.interpreter_register_and_import_module(&ui_interp, log_module, "log")
-
-  sqlite_module := sqlite_forthic.sqlite_module_create()
-  forthic.interpreter_register_and_import_module(&ui_interp, sqlite_module, "sqlite")
-
-  history_module, history_err := forthic.module_create_from_forthic_file(&ui_interp, "history", "lib/history.forthic")
-  if history_err != nil {
-    fmt.println(history_err)
+// Loads a Forthic-file-backed module on ui_interp, exiting the process on
+// any load error (missing file, parse error, etc.) -- there's no
+// reasonable way to keep running without it.
+load_forthic_module :: proc(ui_interp: ^forthic.Interpreter, name: string, path: string) -> ^forthic.Module {
+  module, err := forthic.module_create_from_forthic_file(ui_interp, name, path)
+  if err != nil {
+    fmt.println(err)
     os.exit(1)
   }
-  forthic.interpreter_register_and_import_module(&ui_interp, history_module, "history")
+  return module
+}
 
-  queue: forthic.Mirror_Job_Queue
+// Registers an already-created module on ui_interp under prefix, and wires
+// up the matching mirror module on repl_interp so REPL-typed Forthic can
+// call the same words (forwarded across the queue to run on ui_interp).
+register_module :: proc(
+  ui_interp: ^forthic.Interpreter,
+  repl_interp: ^forthic.Interpreter,
+  queue: ^forthic.Mirror_Job_Queue,
+  module: ^forthic.Module,
+  prefix: string,
+) {
+  forthic.interpreter_register_and_import_module(ui_interp, module, prefix)
+  mirror_module := forthic.module_mirror(module, ui_interp, prefix, queue)
+  forthic.interpreter_register_and_import_module(repl_interp, mirror_module, prefix)
+}
 
-  repl_interp: forthic.Interpreter
-  forthic.interpreter_init(&repl_interp)
-  defer forthic.interpreter_destroy(&repl_interp)
-
-  raylib_mirror_module := forthic.module_mirror(raylib_module, &ui_interp, "raylib", &queue)
-  forthic.interpreter_register_and_import_module(&repl_interp, raylib_mirror_module, "raylib")
-
-  dungeon_mirror_module := forthic.module_mirror(dungeon_module, &ui_interp, "dungeon", &queue)
-  forthic.interpreter_register_and_import_module(&repl_interp, dungeon_mirror_module, "dungeon")
-
-  log_mirror_module := forthic.module_mirror(log_module, &ui_interp, "log", &queue)
-  forthic.interpreter_register_and_import_module(&repl_interp, log_mirror_module, "log")
-
-  sqlite_mirror_module := forthic.module_mirror(sqlite_module, &ui_interp, "sqlite", &queue)
-  forthic.interpreter_register_and_import_module(&repl_interp, sqlite_mirror_module, "sqlite")
-
-  history_mirror_module := forthic.module_mirror(history_module, &ui_interp, "history", &queue)
-  forthic.interpreter_register_and_import_module(&repl_interp, history_mirror_module, "history")
-
-  if len(os.args) > 1 {
-    err := forthic.interpreter_run_file(&ui_interp, os.args[1])
-    if err != nil {
-      fmt.println(err)
-      os.exit(1)
-    }
+// Runs the app's own Forthic file (its word definitions and hooks), if one
+// was given on the command line.
+run_app_script :: proc(ui_interp: ^forthic.Interpreter) {
+  if len(os.args) <= 1 {
+    return
   }
-
-  init_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP", nil})
-  if init_err != nil {
-    fmt.println(init_err)
+  err := forthic.interpreter_run_file(ui_interp, os.args[1])
+  if err != nil {
+    fmt.println(err)
     os.exit(1)
   }
+}
 
-  th := thread.create(repl_thread_proc)
-  th.data = &repl_interp
-  thread.start(th)
+// Calls the app-defined ON-INITIALIZE-APP hook once, before the window's
+// first frame.
+initialize_app :: proc(ui_interp: ^forthic.Interpreter) {
+  err := forthic.interpreter_run(ui_interp, forthic.Positioned_Forthic{"ON-INITIALIZE-APP", nil})
+  if err != nil {
+    fmt.println(err)
+    os.exit(1)
+  }
+}
 
+// Drives the app's own ON-DRAW-FRAME hook once per frame until the window
+// closes, draining any REPL-thread calls queued for this interpreter
+// first so they run on the same thread as raylib's own calls.
+run_frame_loop :: proc(ui_interp: ^forthic.Interpreter, queue: ^forthic.Mirror_Job_Queue) {
   for !raylib.WindowShouldClose() {
-    forthic.mirror_job_queue_drain(&queue, &ui_interp)
-    frame_err := forthic.interpreter_run(&ui_interp, forthic.Positioned_Forthic{"ON-DRAW-FRAME", nil})
+    forthic.mirror_job_queue_drain(queue, ui_interp)
+    frame_err := forthic.interpreter_run(ui_interp, forthic.Positioned_Forthic{"ON-DRAW-FRAME", nil})
     if frame_err != nil {
       fmt.println(frame_err)
       os.exit(1)
     }
   }
   raylib.CloseWindow()
+}
+
+main :: proc() {
+  ui_interp: forthic.Interpreter
+  forthic.interpreter_init(&ui_interp)
+  defer forthic.interpreter_destroy(&ui_interp)
+
+  repl_interp: forthic.Interpreter
+  forthic.interpreter_init(&repl_interp)
+  defer forthic.interpreter_destroy(&repl_interp)
+
+  queue: forthic.Mirror_Job_Queue
+
+  // Registration order matters for the Forthic-file-backed modules: each
+  // one's word references are resolved against ui_interp as it's compiled
+  // (see module_create_from_forthic_file), so a module must be registered
+  // after every other module it calls into.
+  register_module(&ui_interp, &repl_interp, &queue, raylib_forthic.raylib_module_create(), "raylib")
+  register_module(&ui_interp, &repl_interp, &queue, dungeon_forthic.dungeon_module_create(), "dungeon")
+  register_module(&ui_interp, &repl_interp, &queue, log_forthic.log_module_create(), "log")
+  register_module(&ui_interp, &repl_interp, &queue, load_forthic_module(&ui_interp, "message-log", "modules/raylib/lib/message-log.forthic"), "message-log")
+  register_module(&ui_interp, &repl_interp, &queue, load_forthic_module(&ui_interp, "status-bar", "modules/raylib/lib/status-bar.forthic"), "status-bar")
+  register_module(&ui_interp, &repl_interp, &queue, sqlite_forthic.sqlite_module_create(), "sqlite")
+  register_module(&ui_interp, &repl_interp, &queue, load_forthic_module(&ui_interp, "history", "lib/history.forthic"), "history")
+  register_module(&ui_interp, &repl_interp, &queue, load_forthic_module(&ui_interp, "movement", "modules/raylib/lib/movement.forthic"), "movement")
+  register_module(&ui_interp, &repl_interp, &queue, load_forthic_module(&ui_interp, "corridor-view", "modules/raylib/lib/corridor-view.forthic"), "corridor-view")
+
+  run_app_script(&ui_interp)
+  initialize_app(&ui_interp)
+
+  th := thread.create(repl_thread_proc)
+  th.data = &repl_interp
+  thread.start(th)
+
+  run_frame_loop(&ui_interp, &queue)
 }
 
 
