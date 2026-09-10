@@ -543,27 +543,33 @@ test_interpreter_pending_word_options_cleared_after_next_word :: proc(t: ^testin
 }
 
 @(test)
-test_interpreter_record_bare_flag_at_end :: proc(t: ^testing.T) {
+test_interpreter_record_key_with_no_value_is_error :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
   defer interpreter_destroy(&interp)
 
   err := run_forthic(&interp, "{ .a 1 .flag }")
-  testing.expect(t, err == nil)
-
-  top, pop_err := stack_pop(&interp.stack)
-  testing.expect(t, pop_err == nil)
-
-  expected := make(Record)
-  defer delete(expected)
-  expected["a"] = Forthic_Value(i64(1))
-  expected["flag"] = Forthic_Value(bool(true))
-
-  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+  missing, is_missing := err.(Missing_Record_Value)
+  testing.expect(t, is_missing)
+  testing.expect_value(t, missing.key, "flag")
 }
 
 @(test)
-test_interpreter_record_consecutive_bare_flags :: proc(t: ^testing.T) {
+test_interpreter_record_lone_key_is_error :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .flag }")
+  _, is_missing := err.(Missing_Record_Value)
+  testing.expect(t, is_missing)
+}
+
+// A Dot_Symbol reaching value position is an ordinary value, so this is a
+// well-formed pair -- the same thing `[ [ .flag .other ] ] REC` has always
+// meant. Only an odd item count is an error.
+@(test)
+test_interpreter_record_dot_symbol_as_value :: proc(t: ^testing.T) {
   interp: Interpreter
   interpreter_init(&interp)
   defer interpreter_destroy(&interp)
@@ -576,27 +582,7 @@ test_interpreter_record_consecutive_bare_flags :: proc(t: ^testing.T) {
 
   expected := make(Record)
   defer delete(expected)
-  expected["flag"] = Forthic_Value(bool(true))
-  expected["other"] = Forthic_Value(bool(true))
-
-  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
-}
-
-@(test)
-test_interpreter_record_all_bare_flags :: proc(t: ^testing.T) {
-  interp: Interpreter
-  interpreter_init(&interp)
-  defer interpreter_destroy(&interp)
-
-  err := run_forthic(&interp, "{ .flag }")
-  testing.expect(t, err == nil)
-
-  top, pop_err := stack_pop(&interp.stack)
-  testing.expect(t, pop_err == nil)
-
-  expected := make(Record)
-  defer delete(expected)
-  expected["flag"] = Forthic_Value(bool(true))
+  expected["flag"] = Forthic_Value(Dot_Symbol("other"))
 
   testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
 }

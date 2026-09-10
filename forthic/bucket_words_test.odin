@@ -8,9 +8,6 @@ test_bucket_picks_first_matching_breakpoint :: proc(t: ^testing.T) {
   interpreter_init(&interp)
   defer interpreter_destroy(&interp)
 
-  // Key values here are strings, not dot-symbols: a dot-symbol key
-  // immediately followed by a dot-symbol value is parsed as a bare
-  // boolean flag, not a key/value pair (see collection_words.odin).
   err := run_forthic(&interp, `
     0    [ { .below 0 .key "low" } { .below 0.5 .key "medium" } ] "high" BUCKET
     0.25 [ { .below 0 .key "low" } { .below 0.5 .key "medium" } ] "high" BUCKET

@@ -7,6 +7,7 @@ Error :: union {
   Invalid_Word_Name,
   Stack_Underflow,
   Type_Mismatch,
+  Missing_Record_Value,
   Mismatched_Collection,
   Unknown_Word,
   Unknown_Variable,
@@ -30,6 +31,14 @@ Stack_Underflow :: struct {}
 
 Type_Mismatch :: struct {
   note: string,
+  location: Code_Location,
+}
+
+// A record literal key that was left without a value. Every key in a `{ }`
+// literal takes one, so an odd number of items means a value went missing --
+// which a bare-flag default would have silently accepted as intentional.
+Missing_Record_Value :: struct {
+  key: string,
   location: Code_Location,
 }
 
