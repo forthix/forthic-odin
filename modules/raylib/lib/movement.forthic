@@ -36,10 +36,6 @@
 : LEFT-DX     FACING-DY;
 : LEFT-DY     0 FACING-DX -;
 
-# Record values here are strings, not dot-symbols: a dot-symbol immediately
-# followed by another dot-symbol is parsed as a bare boolean flag, not a
-# key/value pair (see collection_words.odin), so back-to-back dot-symbols
-# would silently fail to build the mapping we want.
 : NEXT-FACING-CW    { .N "E" .E "S" .S "W" .W "N" } .player-facing @ JQ@;
 : NEXT-FACING-CCW   { .N "W" .W "S" .S "E" .E "N" } .player-facing @ JQ@;
 

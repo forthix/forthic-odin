@@ -30,10 +30,6 @@
 # ( { .x .y .width .height } -- )
 : INITIALIZE   ( .status-bar-config ! ) ;
 
-# Key values here are strings, not dot-symbols: a dot-symbol immediately
-# followed by another dot-symbol is parsed as a bare boolean flag, not a
-# key/value pair (see collection_words.odin), so { .key "low" } needs a
-# string even though .low would read more naturally.
 : BREAKPOINTS
   [ { .below 0   .key "low" }
     { .below 0.5 .key "medium" } ]
