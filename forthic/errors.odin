@@ -9,6 +9,7 @@ Error :: union {
   Type_Mismatch,
   Missing_Record_Value,
   Mismatched_Collection,
+  Unmatched_Collection_Close,
   Unknown_Word,
   Unknown_Variable,
   Division_By_Zero,
@@ -39,12 +40,22 @@ Type_Mismatch :: struct {
 // which a bare-flag default would have silently accepted as intentional.
 Missing_Record_Value :: struct {
   key: string,
+  note: string,
   location: Code_Location,
 }
 
 Mismatched_Collection :: struct {
   expected: Collection_Kind,
   got: Collection_Kind,
+  location: Code_Location,
+}
+
+// A `]` or `}` with no matching opener. Without this the close words pop an
+// empty start-position stack, which aborts the process instead of reporting a
+// plain syntax error.
+Unmatched_Collection_Close :: struct {
+  kind: Collection_Kind,
+  note: string,
   location: Code_Location,
 }
 

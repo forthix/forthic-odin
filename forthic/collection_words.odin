@@ -1,6 +1,7 @@
 package forthic
 
 import "core:slice"
+import "core:strings"
 
 Collection_Kind :: enum { Array, Record }
 
@@ -18,6 +19,12 @@ builtin_start_array :: proc(interp: ^Interpreter) -> Error {
 
 // ( ...items -- array ) -- everything pushed since the matching [
 builtin_end_array :: proc(interp: ^Interpreter) -> Error {
+  if len(interp.collection_start_positions) == 0 {
+    return Unmatched_Collection_Close{
+      kind = .Array,
+      note = "] with no open array literal",
+    }
+  }
   start := pop(&interp.collection_start_positions)
   if start.kind != .Array {
     return Mismatched_Collection{
@@ -37,6 +44,11 @@ builtin_end_array :: proc(interp: ^Interpreter) -> Error {
     if err != nil  {
       return err
     }
+    // See builtin_end_record: a Dot_Symbol only exists so `}` can tell a key
+    // from a value. An element that lands in data is an ordinary string.
+    if symbol, is_symbol := v.(Dot_Symbol); is_symbol {
+      v = string(symbol)
+    }
     append(&items, v)
   }
   slice.reverse(items[:])
@@ -46,6 +58,12 @@ builtin_end_array :: proc(interp: ^Interpreter) -> Error {
 
 // ( ...key-value-pairs -- record ) -- everything pushed since the matching {
 builtin_end_record :: proc(interp: ^Interpreter) -> Error {
+  if len(interp.collection_start_positions) == 0 {
+    return Unmatched_Collection_Close{
+      kind = .Record,
+      note = "} with no open record literal",
+    }
+  }
   start := pop(&interp.collection_start_positions)
   if start.kind != .Record {
     return Mismatched_Collection{
@@ -79,14 +97,22 @@ builtin_end_record :: proc(interp: ^Interpreter) -> Error {
   // `@` in `{ .file .file @ }` quietly yields flags instead of a lookup and
   // nothing reports it.
   //
-  // A Dot_Symbol in value position is still an ordinary value -- `{ .a .b }` is
+  // A Dot_Symbol in value position is still an ordinary string -- `{ .a .b }` is
   // a well-formed pair. Only the count is checked.
   if count % 2 != 0 {
-    dangling := ""
     if key, ok := items[count - 1].(Dot_Symbol); ok {
-      dangling = string(key)
+      return Missing_Record_Value{
+        key = string(key),
+        note = strings.concatenate({
+          "Record key .", string(key),
+          " has no value. Every key in a { } literal takes one -- write { .",
+          string(key), " value }",
+        }),
+      }
     }
-    return Missing_Record_Value{key = dangling}
+    return Missing_Record_Value{
+      note = "Record literal has an odd number of items, so a key was left without a value",
+    }
   }
 
   record := make(Record)
@@ -95,7 +121,15 @@ builtin_end_record :: proc(interp: ^Interpreter) -> Error {
     if !ok {
       return Type_Mismatch{note = "Record keys must be Dot_Symbols"}
     }
-    record[key] = items[i + 1]
+    // A Dot_Symbol is a parse-time distinction that lets `}` tell a key from a
+    // value. Once it lands in data it is an ordinary string, so unwrap it here:
+    // left as a Dot_Symbol it would print like a string yet compare unequal to
+    // one, and `{ .a .b } .a JQ@ "b" ==` would be false.
+    value := items[i + 1]
+    if symbol, is_symbol := value.(Dot_Symbol); is_symbol {
+      value = string(symbol)
+    }
+    record[key] = value
   }
 
   stack_push(&interp.stack, Forthic_Value(record))

@@ -565,9 +565,8 @@ test_interpreter_record_lone_key_is_error :: proc(t: ^testing.T) {
   testing.expect(t, is_missing)
 }
 
-// A Dot_Symbol reaching value position is an ordinary value, so this is a
-// well-formed pair -- the same thing `[ [ .flag .other ] ] REC` has always
-// meant. Only an odd item count is an error.
+// A Dot_Symbol reaching value position is an ordinary string, so this is a
+// well-formed pair. Only an odd item count is an error.
 @(test)
 test_interpreter_record_dot_symbol_as_value :: proc(t: ^testing.T) {
   interp: Interpreter
@@ -582,9 +581,57 @@ test_interpreter_record_dot_symbol_as_value :: proc(t: ^testing.T) {
 
   expected := make(Record)
   defer delete(expected)
-  expected["flag"] = Forthic_Value(Dot_Symbol("other"))
+  expected["flag"] = Forthic_Value(string("other"))
 
   testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+// A Dot_Symbol only exists so `}` can tell a key from a value. An element that
+// lands in an array is an ordinary string, so it compares equal to one.
+@(test)
+test_interpreter_array_dot_symbol_element_is_string :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "[ .a .b ]")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make([dynamic]Forthic_Value, 0, 2)
+  defer delete(expected)
+  append(&expected, Forthic_Value(string("a")))
+  append(&expected, Forthic_Value(string("b")))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+// A close word with no opener used to pop an empty start-position stack, which
+// aborted the process rather than reporting the syntax error.
+@(test)
+test_interpreter_unmatched_record_close_is_error :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 2 }")
+  unmatched, is_unmatched := err.(Unmatched_Collection_Close)
+  testing.expect(t, is_unmatched)
+  testing.expect_value(t, unmatched.kind, Collection_Kind.Record)
+}
+
+@(test)
+test_interpreter_unmatched_array_close_is_error :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 2 ]")
+  unmatched, is_unmatched := err.(Unmatched_Collection_Close)
+  testing.expect(t, is_unmatched)
+  testing.expect_value(t, unmatched.kind, Collection_Kind.Array)
 }
 
 @(test)
