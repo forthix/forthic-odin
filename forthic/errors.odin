@@ -44,9 +44,18 @@ Missing_Record_Value :: struct {
   location: Code_Location,
 }
 
+// A `}` that reached a `[`, or a `]` that reached a `{` -- the inner literal was
+// never closed.
+//
+// Worth its own error because the alternative is silence: a close word matches
+// only its own opening mark, so the other one is not a delimiter to it, and
+// without this check it is collected as an ordinary item and ends up *inside*
+// the collection being built -- at an item count the key/value rule sees nothing
+// wrong with.
 Mismatched_Collection :: struct {
   expected: Collection_Kind,
   got: Collection_Kind,
+  note: string,
   location: Code_Location,
 }
 

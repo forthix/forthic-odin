@@ -28,6 +28,8 @@ forthic_value_to_string :: proc(value: Forthic_Value) -> string {
     return v
   case Dot_Symbol:
     return string(v)
+  case Collection_Mark:
+    return collection_mark_to_string(v)
   case Record:
     return fmt.tprintf("%v", v)
   case [dynamic]Forthic_Value:

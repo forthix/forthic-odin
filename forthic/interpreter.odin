@@ -27,9 +27,6 @@ Interpreter :: struct {
   // calls. Empty (no active frame) at the top level.
   local_frames: [dynamic]map[string]Forthic_Value,
 
-  // Array/record support
-  collection_start_positions: [dynamic]Collection_Start,
-
   literal_handlers: [dynamic]Literal_Handler,
 
   pending_word_options: Maybe(Word_Options),
@@ -194,11 +191,16 @@ interpreter_handle_token :: proc(interp: ^Interpreter, token: Token) -> Error {
   case .String:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("<string>"), action = Forthic_Value(strings.clone(token.text))})
   case .StartArray:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Builtin_Word_Proc(builtin_start_array)})
+    // `[` pushes a value, not a builtin: the mark is an ordinary Forthic value
+    // that `]` folds back to, and taking the location here is the only place
+    // the opener's token is in hand -- a Builtin_Word_Proc never sees it.
+    mark := Collection_Mark{kind = .Array, location = token.location}
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("["), action = Forthic_Value(mark)})
   case .EndArray:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("]"), action = Builtin_Word_Proc(builtin_end_array)})
   case .StartRecord:
-    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Builtin_Word_Proc(builtin_start_record)})
+    mark := Collection_Mark{kind = .Record, location = token.location}
+    return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("{"), action = Forthic_Value(mark)})
   case .EndRecord:
     return interpreter_handle_word(interp, Compiled_Word{name = strings.clone("}"), action = Builtin_Word_Proc(builtin_end_record)})
   case:

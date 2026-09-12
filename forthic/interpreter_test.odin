@@ -634,6 +634,165 @@ test_interpreter_unmatched_array_close_is_error :: proc(t: ^testing.T) {
   testing.expect_value(t, unmatched.kind, Collection_Kind.Array)
 }
 
+// `[` and `{` leave a Collection_Mark on the stack and `]`/`}` fold back to it.
+// The mark is an ordinary Forthic value, which is what makes `[` a word rather
+// than syntax: words can move it.
+@(test)
+test_interpreter_collection_mark_is_a_value_on_the_stack :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  // DUP copies the mark; the `]` closes the copy, leaving the original.
+  err := run_forthic(&interp, "[ DUP 1 ]")
+  testing.expect(t, err == nil)
+  testing.expect_value(t, stack_len(&interp.stack), 2)
+
+  bottom, got_bottom := stack_get(&interp.stack, 0)
+  testing.expect(t, got_bottom)
+  mark, is_mark := bottom.(Collection_Mark)
+  testing.expect(t, is_mark)
+  testing.expect_value(t, mark.kind, Collection_Kind.Array)
+  testing.expect_value(t, mark.location.start.line, 1)
+  testing.expect_value(t, mark.location.start.column, 1)
+}
+
+// A mark on the stack should not read as the string "[".
+@(test)
+test_interpreter_collection_mark_renders_as_a_mark :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "[ DUP 1 ]")
+  testing.expect(t, err == nil)
+
+  bottom, _ := stack_get(&interp.stack, 0)
+  testing.expect_value(t, forthic_value_to_string(bottom), "<[>")
+}
+
+// The payoff of the mark being a value: moving it changes what the literal
+// captures.
+@(test)
+test_interpreter_swap_moves_the_mark_into_the_array :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 [ SWAP ]")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make([dynamic]Forthic_Value, 0, 1)
+  defer delete(expected)
+  append(&expected, Forthic_Value(i64(1)))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+@(test)
+test_interpreter_open_bracket_factors_into_a_definition :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, ": MARK   [ ;   MARK 1 2 ]")
+  testing.expect(t, err == nil)
+
+  top, pop_err := stack_pop(&interp.stack)
+  testing.expect(t, pop_err == nil)
+
+  expected := make([dynamic]Forthic_Value, 0, 2)
+  defer delete(expected)
+  append(&expected, Forthic_Value(i64(1)))
+  append(&expected, Forthic_Value(i64(2)))
+
+  testing.expect(t, forthic_value_equal(top, Forthic_Value(expected)))
+}
+
+// Under the old stack-depth model this silently produced an empty array: DROP
+// reached below the recorded depth, so the count came out zero and `3` -- pushed
+// inside the literal -- was left out with nothing reported. Popping to a mark
+// cannot step over the opener that way.
+@(test)
+test_interpreter_dropping_the_mark_leaves_nothing_to_close :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "1 2 [ DROP 3 ]")
+  unmatched, is_unmatched := err.(Unmatched_Collection_Close)
+  testing.expect(t, is_unmatched)
+  testing.expect_value(t, unmatched.kind, Collection_Kind.Array)
+}
+
+// The mark carries the opener's location, so the error points at the `[` that
+// was left unclosed rather than the `}` that tripped over it.
+@(test)
+test_interpreter_mismatch_reports_the_unclosed_opener_location :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .a [ .b 1 }")
+  mismatch, is_mismatch := err.(Mismatched_Collection)
+  testing.expect(t, is_mismatch)
+  // The `[` is at column 6, not the `}` at column 13.
+  testing.expect_value(t, mismatch.location.start.line, 1)
+  testing.expect_value(t, mismatch.location.start.column, 6)
+}
+
+// A close word matches only its own opener, so the other one is not a delimiter
+// to it: left unchecked it is folded into the collection as an ordinary item,
+// and at an even item count the key/value rule sees nothing wrong either. The
+// failure mode is a wrong value rather than an error, so both directions are
+// pinned.
+@(test)
+test_interpreter_record_close_reaching_open_array_is_error :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .a [ .b 1 }")
+  mismatch, is_mismatch := err.(Mismatched_Collection)
+  testing.expect(t, is_mismatch)
+  testing.expect_value(t, mismatch.expected, Collection_Kind.Record)
+  testing.expect_value(t, mismatch.got, Collection_Kind.Array)
+}
+
+@(test)
+test_interpreter_array_close_reaching_open_record_is_error :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "[ .a { 1 2 ]")
+  mismatch, is_mismatch := err.(Mismatched_Collection)
+  testing.expect(t, is_mismatch)
+  testing.expect_value(t, mismatch.expected, Collection_Kind.Array)
+  testing.expect_value(t, mismatch.got, Collection_Kind.Record)
+}
+
+// Errors reach the user through fmt.println, so a bare struct names the two
+// kinds but not the fix. The note names the delimiter that has to be added.
+@(test)
+test_interpreter_mismatched_collection_note_names_missing_delimiter :: proc(t: ^testing.T) {
+  interp: Interpreter
+  interpreter_init(&interp)
+  defer interpreter_destroy(&interp)
+
+  err := run_forthic(&interp, "{ .a [ .b 1 }")
+  mismatch, is_mismatch := err.(Mismatched_Collection)
+  testing.expect(t, is_mismatch)
+  testing.expect_value(
+    t,
+    mismatch.note,
+    "Mismatched '}' -- an unclosed '[' is open inside this '{'. Add the ']' it needs",
+  )
+}
+
 @(test)
 test_interpreter_record_key_must_be_dot_symbol :: proc(t: ^testing.T) {
   interp: Interpreter
