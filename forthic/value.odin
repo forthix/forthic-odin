@@ -9,6 +9,7 @@ Forthic_Value :: union {
   f64,
   string,
   Dot_Symbol,
+  Collection_Mark,
   Record,
   [dynamic]Forthic_Value,
 }
@@ -30,6 +31,11 @@ forthic_value_equal :: proc(a, b: Forthic_Value) -> bool {
   case Dot_Symbol:
     vb, ok := b.(Dot_Symbol)
     return ok  && va == vb
+  case Collection_Mark:
+    vb, ok := b.(Collection_Mark)
+    // Kind only. A mark's location is diagnostic, not part of the value: two
+    // `[` marks are the same opener whichever line each was written on.
+    return ok  && va.kind == vb.kind
   case [dynamic]Forthic_Value:
     vb, ok := b.([dynamic]Forthic_Value)
     if !ok || len(va) != len(vb) {

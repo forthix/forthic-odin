@@ -191,6 +191,13 @@ bind_param :: proc(stmt: ^Stmt, idx: c.int, value: forthic.Forthic_Value) -> for
     sqlite3_bind_text(stmt, idx, text_cstring, -1, SQLITE_TRANSIENT)
   case forthic.Record, [dynamic]forthic.Forthic_Value:
     return forthic.Type_Mismatch{note = "sqlite params must be scalars (records/arrays are not bindable)"}
+  // A mark is interpreter state, not data. It reaches a param slot only when a
+  // literal was left unclosed and its opener escaped the fold -- `[ DUP 1 ]`
+  // leaves one. Binding it would write parse bookkeeping into the database,
+  // where nothing downstream could tell it from a value the program meant to
+  // store, so it stops at the boundary instead.
+  case forthic.Collection_Mark:
+    return forthic.Type_Mismatch{note = "sqlite params cannot be a collection mark -- an unclosed '[' or '{' left one on the stack"}
   }
   return nil
 }
